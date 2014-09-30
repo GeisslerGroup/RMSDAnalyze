@@ -1,0 +1,5 @@
+for { set i 0 } { $i < 101 } { incr i } {
+        puts $i
+	[atomselect 0 "all" frame $i] set user [[atomselect 1 "all" frame $i] get x] 
+}
+[atomselect 0 "all" frame 1] get user
