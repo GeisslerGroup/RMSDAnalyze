@@ -36,26 +36,35 @@ done
 #done
 
 
-times=(2.5 3.0 3.5 4.0 5.0 7.5 10.0)
+#times=(2.5 3.0 3.5 4.0 5.0 7.5 10.0)
+#
+#DIR=image/2014-09-24-activity
+#mkdir $DIR
+#for i in ${times[@]}; do
+#    FNAME=angle_act
+#    python RMSDAnalyze.py -rmsd_grid png -rmsd_dt $i -rmsd_type angle -rmsd_activityparm 1.2 20 -rmsd_grid_file $FNAME -rmsd_colorrange .1 .9
+#    mv $FNAME.png $DIR/$FNAME."$i"ps.png
+#done
+#
+#times=(0.2 0.4 0.6 0.8 1.0 1.5 2.0 2.5 3.0 3.5 4.0 5.0 7.5 10.0)
+#
+#for i in ${times[@]}; do
+#    FNAME=rmsd_act
+#    python RMSDAnalyze.py -rmsd_grid png -rmsd_dt $i -rmsd_type rmsd -rmsd_activityparm .38 20 -rmsd_grid_file $FNAME -rmsd_colorrange .1 .9
+#    mv $FNAME.png $DIR/$FNAME."$i"ps.png
+#done
+#
+#for i in ${times[@]}; do
+#    FNAME=diff_act
+#    python RMSDAnalyze.py -rmsd_grid png -rmsd_dt $i -rmsd_type rmsd -rmsd_scaletime -rmsd_activityparm .12 20 -rmsd_grid_file $FNAME -rmsd_colorrange .1 .9
+#    mv $FNAME.png $DIR/$FNAME."$i"ps.png
+#done
 
-DIR=image/2014-09-24-activity
-mkdir $DIR
-for i in ${times[@]}; do
-    FNAME=angle_act
-    python RMSDAnalyze.py -rmsd_grid png -rmsd_dt $i -rmsd_type angle -rmsd_activityparm 1.2 20 -rmsd_grid_file $FNAME -rmsd_colorrange .1 .9
-    mv $FNAME.png $DIR/$FNAME."$i"ps.png
-done
 
-times=(0.2 0.4 0.6 0.8 1.0 1.5 2.0 2.5 3.0 3.5 4.0 5.0 7.5 10.0)
-
-for i in ${times[@]}; do
-    FNAME=rmsd_act
-    python RMSDAnalyze.py -rmsd_grid png -rmsd_dt $i -rmsd_type rmsd -rmsd_activityparm .38 20 -rmsd_grid_file $FNAME -rmsd_colorrange .1 .9
-    mv $FNAME.png $DIR/$FNAME."$i"ps.png
-done
-
+times=(19.9)
+DIR=image/
 for i in ${times[@]}; do
     FNAME=diff_act
-    python RMSDAnalyze.py -rmsd_grid png -rmsd_dt $i -rmsd_type rmsd -rmsd_scaletime -rmsd_activityparm .12 20 -rmsd_grid_file $FNAME -rmsd_colorrange .1 .9
+    python main.py -rmsd_grid png -rmsd_dt $i -rmsd_type rmsd -rmsd_scaletime -rmsd_activityparm .12 20 -rmsd_grid_file $FNAME -rmsd_colorrange .1 .9
     mv $FNAME.png $DIR/$FNAME."$i"ps.png
 done

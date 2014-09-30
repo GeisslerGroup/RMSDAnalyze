@@ -1,7 +1,10 @@
-import RMSDAnalyze
+import RMSDAnalyze.grid
+import RMSDAnalyze.atomic
+import RMSDAnalyze.convert
 import argparse
 import ConfigParser
 import h5py
+import matplotlib.pyplot as plt
 
 
 def main():
@@ -41,15 +44,15 @@ def main():
     if args.gro and args.trr:
         raise ValueError("Cannot load from both .gro and .trr; select only one!")
     if args.trr != None:
-        trr2hdf5(args.trr, hdffile, hdfatom)
+        RMSDAnalyze.convert.trr2hdf5(args.trr, hdffile, hdfatom)
     if args.gro != None:
-        gro2hdf5(args.gro, hdffile, hdfatom)
+        RMSDAnalyze.convert.gro2hdf5(args.gro, hdffile, hdfatom)
 
 
 
     if args.gro_copy:
         print "Creating a copy of frames {} of {} with grocopy".format(args.gro_frames, args.gro_copy[0])
-        copygro(args.gro_copy[0], args.gro_copy[1], args.gro_frames)
+        RMSDAnalyze.convert.copygro(args.gro_copy[0], args.gro_copy[1], args.gro_frames)
 
     with h5py.File(hdffile,'r') as h5:
         ds = h5[hdfatom]
@@ -57,11 +60,11 @@ def main():
         print ds.attrs["dt"]
         if args.rmsd_out:
             rmsd_dT = int(round(args.rmsd_dt / ds.attrs["dt"]))
-            AtomRMSD(ds,args.rmsd_out, rmsd_dT)
+            RMSDAnalyze.atom.AtomRMSD(ds,args.rmsd_out, rmsd_dT)
         if args.act_out:
             print "activity parameters: r0 = {}, k = {}".format(args.act_dist, args.act_slope)
             activity_dT = int(round(args.act_dt / ds.attrs["dt"]))
-            AtomActivity(ds,args.act_out, args.act_openflag, args.act_frames, activity_dT, args.act_dist, args.act_slope)
+            RMSDAnalyze.atom.AtomActivity(ds,args.act_out, args.act_openflag, args.act_frames, activity_dT, args.act_dist, args.act_slope)
 
         if args.rmsd_grid:
             rmsd_dT = int(round(args.rmsd_dt / ds.attrs["dt"]))
@@ -69,21 +72,23 @@ def main():
             rmsd_lambda = None
             if args.rmsd_activityparm:
                 print "Creating RMSDLambda to compute activity"
-                rmsd_lambda = RMSDLambda(b_activity = True,                 \
-                                         b_scaletime = args.rmsd_scaletime, \
-                                         rmsd_delay = args.rmsd_dt,         \
-                                         cutoff=args.rmsd_activityparm[0],  \
-                                         sharpness=args.rmsd_activityparm[1])
+                rmsd_lambda = RMSDAnalyze.grid.RMSDLambda(
+                                        b_activity = True,                 \
+                                        b_scaletime = args.rmsd_scaletime, \
+                                        rmsd_delay = args.rmsd_dt,         \
+                                        cutoff=args.rmsd_activityparm[0],  \
+                                        sharpness=args.rmsd_activityparm[1])
                 rmsd_lambda.SetTitle(args.rmsd_type)
             elif args.rmsd_scaletime:
                 print "Creating RMSDLambda to scale time"
-                rmsd_lambda = RMSDLambda(b_activity = False,                \
-                                         b_scaletime = args.rmsd_scaletime, \
-                                         rmsd_delay = args.rmsd_dt)
+                rmsd_lambda = RMSDAnalyze.grid.RMSDLambda(
+                                        b_activity = False,                \
+                                        b_scaletime = args.rmsd_scaletime, \
+                                        rmsd_delay = args.rmsd_dt)
                 rmsd_lambda.SetTitle(args.rmsd_type)
             if 'png' in args.rmsd_grid and args.rmsd_grid_file == None:
                 args.rmsd_grid_file = "default_{}ps".format(args.rmsd_dt)
-            GridRMSDRadial(ds,rmsd_dT, rmsd_type=args.rmsd_type, colorrange=args.rmsd_colorrange, \
+            RMSDAnalyze.grid.GridRMSDRadial(ds,rmsd_dT, rmsd_type=args.rmsd_type, colorrange=args.rmsd_colorrange, \
                     display_type = args.rmsd_grid, file_name=args.rmsd_grid_file, rmsd_lambda = rmsd_lambda, \
                     colormap=colormap)
 
