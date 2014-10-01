@@ -38,7 +38,13 @@ class RMSDLambda:
             else:
                 self.title='Mean RMSD, t_delay={}ps'.format(self.rmsd_delay/10.0)
 
-
+class PlotLabeler:
+    def __init__(self, title=None, xlabel=None, ylabel=None, colorrange=None, colormap=plt.cm.Spectral_r):
+        self.title = title
+        self.xlabel= xlabel
+        self.ylabel= ylabel
+        self.colorrange=colorrange
+        self.colormap=colormap
 
 def ComputeRMSD(r0_ik, r1_ik, pre_cutoff=None, post_cutoff=None, rmsd_lambda = None):
     dr_ik = r0_ik- r1_ik 
@@ -68,33 +74,22 @@ def ComputeRMSAngle(r0_ik, r1_ik, rmsd_lambda = None):
 def ComputeQ6(atoms_i, cutoff_A):
     return np.ones(atoms_i.shape)
 
-
-class PlotLabeler:
-    def __init__(self, title=None, xlabel=None, ylabel=None, colorrange=None, colormap=plt.cm.Spectral_r):
-        self.title = title
-        self.xlabel= xlabel
-        self.ylabel= ylabel
-        self.colorrange=colorrange
-        self.colormap=colormap
-
-
 def OPPlotter2D(x,y, value, extent, gridsize, plotlabeler=PlotLabeler, style='hex', subplot=(1,1,1)):
     plt.subplot( subplot[0], subplot[1], subplot[2] )
     print "Gridsize: {}, extent: {}".format(gridsize, extent)
     if plotlabeler.colorrange:
         plot_out = plt.hexbin(x, y, C=value, \
-                                vmin=plotlabeler.colorrange[0], \
-                                vmax=plotlabeler.colorrange[1], \
-                                cmap=plotlabeler.colormap, \
-                                gridsize=gridsize, extent=extent)
+                   vmin=plotlabeler.colorrange[0], \
+                   vmax=plotlabeler.colorrange[1], \
+                   cmap=plotlabeler.colormap, \
+                   gridsize=gridsize, extent=extent)
     else:
         print x.shape
         print y.shape
         print value.shape
         plot_out = plt.hexbin(x, y, C=value, \
-                                cmap=plotlabeler.colormap, \
-                                gridsize=gridsize, extent=extent)
-
+                   cmap=plotlabeler.colormap, \
+                   gridsize=gridsize, extent=extent)
     cb = plt.colorbar(plot_out, spacing='uniform',extend='max')
     plt.title (plotlabeler.title)
     plt.xlabel(plotlabeler.xlabel)
@@ -129,7 +124,6 @@ def UpdateRunningMean2D(running_mean_mtx, running_weight_mtx, x, y, value, exten
         running_weight_mtx = running_weight_mtx + weight_mtx
     return running_mean_mtx, running_weight_mtx
 
-
 def ProcessSparseRunner(running_mean, running_weight, mtx_scale, z_extent, coord='cyl'):
     running_mean = running_mean / running_weight
     running_mean   = running_mean.tocoo()
@@ -140,7 +134,6 @@ def ProcessSparseRunner(running_mean, running_weight, mtx_scale, z_extent, coord
     data_pos -= np.array([0,z_extent])
     weight_pos = np.vstack((running_weight.row,running_weight.col)).astype(float).T / mtx_scale
     weight_pos -= np.array([0,z_extent])
-
     if coord=='cyl':
         weight_mean = running_weight.data / weight_pos[:,0]
     else:
@@ -148,8 +141,15 @@ def ProcessSparseRunner(running_mean, running_weight, mtx_scale, z_extent, coord
     return (running_mean.data, data_pos), (weight_mean, weight_pos)
 
 
-def GridOPRadial(data_tik, display_type=[], colorrange=[None,None], op_type='q6', \
+def GridOPRadial(data_tik, display_type=[], dynamic_step = 0, colorrange=[None,None], op_type='q6', \
                    file_name=None, rmsd_lambda=None, colormap=plt.cm.Spectral_r):
+    dynamic=['rmsd','angle']
+    static=['q6','density']
+    if dynamic_step > 0 and op_type in static:
+        raise ValueError("Cannot use a dynamic step {} > 0 with an op_type {}".format(dynamic_step, op_type))
+    if dynamic_step == 0 and op_type in dynamic:
+        raise ValueError("Cannot use a dynamic step == 0 with an op_type {}".format(dynamic_step, op_type))
+
     atom_type = 'water'
     running_mean_mtx = None
     running_weight_mtx = None
@@ -159,34 +159,45 @@ def GridOPRadial(data_tik, display_type=[], colorrange=[None,None], op_type='q6'
     water_pos = 83674
     ion_pos  = 423427
     mtx_scale = max(gridsize[0] / r_extent, gridsize[1] / (2 * z_extent)) * 100
-    for t0 in xrange(data_tik.shape[0]):
+    for t0 in xrange(data_tik.shape[0] - dynamic_step):
         print "outputting time {} of {}".format(t0, data_tik.shape[0])
+        atoms = [data_tik[t0,:,:]]
+        if op_type in dynamic:
+            atoms.append(data_tik[t0+dynamic_step,:,:])
+
         # PRE-FILTER
         if atom_type == 'water':
-            atoms_i = data_tik[t0,water_pos:ion_pos,:]
+            for i in xrange(len(atoms)):
+                atoms[i] = atoms[i][water_pos:ion_pos:,:]
         else:
-            raise ValueError("GridRMSDRadial passed atom_type that is not known: {}".format(atom_type))
+            raise ValueError("GridOPRadial passed atom_type that is not known: {}".format(atom_type))
+        if op_type != 'angle' and atom_type =='water':
+            for i in xrange(len(atoms)):
+                atoms[i] = atoms[i][::3]
         # Run the appropriate computation on those atoms
-        if op_type == 'q6':
-            op_i = ComputeQ6(atoms_i, cutoff_A=4.0)
+        if   op_type == 'q6':
+            op_i = ComputeQ6(atoms[0], cutoff_A=4.0)
         elif op_type == 'density':
-            op_i = np.ones(atoms_i.shape)
+            op_i = np.ones(atoms[0].shape)
+        elif op_type == 'rmsd':
+            op_i = ComputeRMSD(atoms[0], atom[1], post_cutoff=5.0, rmsd_lambda = rmsd_lambda)
+        elif op_type == 'angle':
+            op_i = ComputeRMSAngle(atoms[0], atoms[1], rmsd_lambda = rmsd_lambda)
         else:
             raise ValueError("GridOPRadial passed op_type that is not known: {}".format(op_type))
         # POST-FILTER
-        if atom_type == 'water':
-            atoms_i = atoms_i[::3]
-            op_i    = op_i[::3]
-        else:
-            raise ValueError("GridOPRadial passed atom_type that is not known: {}".format(op_type))
+        if op_type == 'angle' and atom_type == 'water':
+            atoms[0] = atoms[0][::3]
+
         # Convert to cylindrical coords and center
         center_k = np.mean(data_tik[t0,:,:], axis=0)
-        r_ik = atoms_i - center_k
+        r_ik = atoms[0] - center_k
         r_cyl_i = np.sqrt( np.square(r_ik[:,0]) + np.square(r_ik[:,1]))
         z_cyl_i = r_ik[:,2]
         # Truncate to relevant regions of the box
         extent = [0, r_extent, -z_extent, z_extent]
         sub = (r_cyl_i < r_extent) * (np.abs(z_cyl_i) < z_extent)
+        print sub.shape, op_i.shape
         r    = r_cyl_i[sub]
         z    = z_cyl_i[sub]
         op_i = op_i[sub]
@@ -229,162 +240,3 @@ def GridOPRadial(data_tik, display_type=[], colorrange=[None,None], op_type='q6'
     if 'display' in display_type:
         plt.show()
     
-
-def GridRMSDRadial(data_tik, rmsd_step, display_type=[], colorrange=None, rmsd_type='rmsd', \
-                   file_name=None, rmsd_lambda=None, colormap=plt.cm.Spectral_r):
-    if colorrange==None:
-        colorrange=[None,None]
-    atom_type = 'water'
-    running_mean_mtx = None
-    running_weight_mtx = None
-
-    gridsize = [40,30]
-    r_extent = 10.0
-    z_extent = 4.0
-    water_pos = 83674
-    ion_pos  = 423427
-
-    mtx_scale = max(gridsize[0] / r_extent, gridsize[1] / (2 * z_extent)) * 100
-
-    for t0 in xrange(data_tik.shape[0]-rmsd_step):
-        print "outputting time {} of {}".format(t0, data_tik.shape[0]-rmsd_step-1)
-        display_histogram=False
-        
-        # Select the atom subset to run computation on
-        if atom_type == 'water':
-            atoms_i = data_tik[t0,water_pos:ion_pos,:]
-            atoms_f = data_tik[t0+rmsd_step,water_pos:ion_pos,:]
-        else:
-            raise ValueError("GridRMSDRadial passed atom_type that is not known: {}".format(atom_type))
-
-        # Runn the appropriate computation on those atoms
-        if rmsd_type == 'rmsd':
-            rmsd_i = ComputeRMSD(atoms_i, atoms_f, pre_cutoff=5.0, rmsd_lambda=rmsd_lambda)
-        elif rmsd_type == 'angle':
-            if atom_type != 'water':
-                raise ValueError("atom_type \'water\' must be used with rmsd_type = \'angle\'")
-            rmsd_i = ComputeRMSAngle(atoms_i, atoms_f, rmsd_lambda=rmsd_lambda)
-        else:
-            raise ValueError("GridRMSDRadial passed rmsd_type that is not known: {}".format(rmsd_type))
-
-        if display_histogram:
-            plt.hist(rmsd_i)
-            plt.title("RMSD Post-histogram")
-            plt.show()
-
-        # Center the initial frame to compute the histogram
-        center_k = np.mean(data_tik[t0,:,:], axis=0)
-        r_ik = atoms_i - center_k
-        r_cyl_i = np.sqrt( np.square(r_ik[:,0]) + np.square(r_ik[:,1]))
-        z_cyl_i = r_ik[:,2]
-        
-        # Select only oxygens from water, and only within a spatial domain specified by sub
-        if atom_type == 'water':
-            r = r_cyl_i[::3]
-            z = z_cyl_i[::3]
-            if rmsd_type=='rmsd':
-                C = rmsd_i[::3]
-            elif rmsd_type=='angle':
-                C = rmsd_i
-            else:
-                raise ValueError("GridRMSDRadial passed rmsd_type that is not known: {}".format(rmsd_type))
-
-        # Compute the extent of the box
-        extent = [0, r_extent, -z_extent, z_extent]
-        # Create a boolean vector to select atoms only within the bounds of the extents
-        sub = (r < r_extent) * (np.abs(z) < z_extent)
-
-
-        # Compute the mean RMSD per box and the weight of the box
-        hexmeanplt   = plt.hexbin(r[sub], z[sub], C=C[sub], \
-                cmap=colormap, mincnt=0, gridsize = gridsize, extent=extent) 
-        cb = plt.colorbar(hexmeanplt, spacing='uniform',extend='max')
-        plt.clf()
-        hexweightplt = plt.hexbin(r[sub], z[sub], \
-                cmap=colormap, mincnt=0, gridsize = gridsize, extent=extent) 
-        cb = plt.colorbar(hexweightplt, spacing='uniform',extend='max')
-        plt.clf()
-
-
-        #plt.show()
-        hex_mean   = hexmeanplt.get_array()
-        hex_weight = hexweightplt.get_array()
-        #print "mean shape, weight shape: {}, {}".format(hex_mean.shape, hex_weight.shape)
-        mean_pos   =  mtx_scale * (hexmeanplt.get_offsets()   + np.array([0,z_extent]))
-        weight_pos =  mtx_scale * (hexweightplt.get_offsets() + np.array([0,z_extent]))
-        mean_pos.astype(int)
-        weight_pos.astype(int)
-
-
-        if running_mean_mtx == None and running_weight_mtx == None:
-            mean_mtx   = mtx.csr_matrix( (hex_mean  , (mean_pos[:,0],   mean_pos[:,1]  )), dtype='f')
-            weight_mtx = mtx.csr_matrix( (hex_weight, (weight_pos[:,0], weight_pos[:,1])) )
-            running_mean_mtx   = mean_mtx.multiply(weight_mtx)
-            running_weight_mtx = weight_mtx
-        else:
-            mean_mtx   = mtx.csr_matrix( (hex_mean  , (mean_pos[:,0],   mean_pos[:,1]  )), dtype='f')
-            weight_mtx = mtx.csr_matrix( (hex_weight, (weight_pos[:,0], weight_pos[:,1])) )
-            running_mean_mtx   = running_mean_mtx + mean_mtx.multiply(weight_mtx)
-            running_weight_mtx = running_weight_mtx + weight_mtx
-
-
-    running_mean_mtx = running_mean_mtx / running_weight_mtx
-
-    running_mean_mtx   = running_mean_mtx.tocoo()
-    running_weight_mtx = running_weight_mtx.tocoo()
-    #print "RUNNING MEAN TYPE: {}".format(type(running_mean_mtx))
-    #print "RUNNING MEAN DATA: {}".format(running_mean_mtx)
-    vertsRMSD = np.vstack((running_mean_mtx.row,running_mean_mtx.col)).astype(float).T / mtx_scale
-    vertsRMSD -= np.array([0,z_extent])
-    weightedRMSD = running_mean_mtx.data
-    verts_density = np.vstack((running_weight_mtx.row,running_weight_mtx.col)).astype(float).T / mtx_scale
-    verts_density -= np.array([0,z_extent])
-    mean_density = running_weight_mtx.data / verts_density[:,0]
-    
-
-    # Plot the protein structure
-    center_k = np.mean(data_tik[:,0:water_pos,:], axis=(0,1))
-    protein_r = np.sqrt(np.square(data_tik[0,0:water_pos,0] - center_k[0]) + \
-                        np.square(data_tik[0,0:water_pos,1] - center_k[1]) )
-    protein_z = data_tik[0,0:water_pos,2] - center_k[2]
-    sub = (protein_r < r_extent) * (np.abs(protein_z) < z_extent)
-
-
-
-    print "PLOTTING THE FINAL RESULT!!"
-    counts = hexmeanplt.get_array()
-    ncnts = np.count_nonzero(np.power(10,counts))
-    binx = vertsRMSD[:,0]
-    biny = vertsRMSD[:,1]
-    plt.subplot(2,1,1)
-    RMSD_out = plt.hexbin(binx, biny, C=weightedRMSD, vmin=colorrange[0], vmax=colorrange[1], \
-                          cmap=colormap, gridsize=gridsize, extent=extent)
-    plt.plot(protein_r[sub], protein_z[sub], '-k', alpha=.3)
-    cb = plt.colorbar(RMSD_out, spacing='uniform',extend='max')
-
-    if rmsd_lambda.title:
-        title=rmsd_lambda.title
-    plt.title(title)
-    plt.xlabel("R, cylindrical radius from center of disc (nm)")
-    plt.ylabel("Z, vertical height (nm)")
-
-    plt.subplot(2,1,2)
-    binx = verts_density[:,0]
-    biny = verts_density[:,1]
-    density_out = plt.hexbin(binx,biny,C=mean_density/(data_tik.shape[0]-rmsd_step), \
-                             cmap=colormap, gridsize=gridsize, extent=extent)
-    cb = plt.colorbar(density_out, spacing='uniform',extend='max')
-    plt.plot(protein_r[sub], protein_z[sub], '-k', alpha=.3)
-    plt.title("Density (atom per frame)")
-    plt.xlabel("R, cylindrical radius from center of disc (nm)")
-    plt.ylabel("Z, vertical height (nm)")
-    plt.tight_layout()
-
-    if 'png' in display_type:
-        if file_name:
-            plt.savefig(file_name + '.png')
-        else:
-            plt.savefig('default.png')
-
-    if 'display' in display_type:
-        plt.show()

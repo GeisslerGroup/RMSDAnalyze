@@ -87,9 +87,8 @@ def main():
                 rmsd_lambda.SetTitle(args.rmsd_type)
             if 'png' in args.rmsd_grid and args.rmsd_grid_file == None:
                 args.rmsd_grid_file = "default_{}ps".format(args.rmsd_dt)
-            GRID.GridRMSDRadial(ds,rmsd_dT, rmsd_type=args.rmsd_type, colorrange=args.rmsd_colorrange, \
-                    display_type = args.rmsd_grid, file_name=args.rmsd_grid_file, rmsd_lambda = rmsd_lambda, \
-                    colormap=colormap)
+            GRID.GridOPRadial(ds, dynamic_step=rmsd_dT, op_type=args.rmsd_type, colorrange=args.rmsd_colorrange, \
+                    display_type = args.rmsd_grid, file_name=args.rmsd_grid_file, rmsd_lambda = rmsd_lambda, colormap=colormap)
 
         if args.op_grid:
             GRID.GridOPRadial(ds[0:3,:,:], display_type = args.op_grid, colorrange=args.rmsd_colorrange, op_type=args.op_type, \

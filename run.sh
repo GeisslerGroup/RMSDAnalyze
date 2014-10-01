@@ -66,6 +66,7 @@ times=(19.9)
 for i in ${times[@]}; do
     FNAME=rmsd_act
     #python RMSDAnalyze.py -rmsd_grid png -rmsd_dt $i -rmsd_type rmsd -rmsd_activityparm .38 20 -rmsd_grid_file $FNAME -rmsd_colorrange .1 .9
-    python main.py -op_grid display -op_type q6 -op_grid_file $FNAME 
+    python main.py -rmsd_grid display -rmsd_dt $i -rmsd_type angle -rmsd_activityparm 1.2 20 -rmsd_colorrange .1 .9
+    #python main.py -op_grid display -op_type q6 -op_grid_file $FNAME 
     #mv $FNAME.png $DIR/$FNAME."$i"ps.png
 done
