@@ -70,7 +70,7 @@ def ComputeQ6(atoms_i, cutoff_A):
 
 
 class PlotLabeler:
-    def __init__(self, title=None, xlabel=None, ylabel=None, colorrange=[None,None], colormap=plt.cm.Spectral_r):
+    def __init__(self, title=None, xlabel=None, ylabel=None, colorrange=None, colormap=plt.cm.Spectral_r):
         self.title = title
         self.xlabel= xlabel
         self.ylabel= ylabel
@@ -78,101 +78,94 @@ class PlotLabeler:
         self.colormap=colormap
 
 
-def OPPlotter2D(x,y, value, extent, gridsize, mtx_scale=100, plotlabeler=PlotLabeler(), style='hex', subplot=(1,1,1)):
-    plt.subplot( subplot )
-    plot_out = plt.hexbin(x, y, C=value, \
-                            vmin=plotlabeler.colorrange[0], \
-                            vmax=plotlabeler.colorrange[1], \
-                            cmap=plotlabeler.colormap, \
-                            gridsize=gridsize, extent=extent)
+def OPPlotter2D(x,y, value, extent, gridsize, plotlabeler=PlotLabeler, style='hex', subplot=(1,1,1)):
+    plt.subplot( subplot[0], subplot[1], subplot[2] )
+    print "Gridsize: {}, extent: {}".format(gridsize, extent)
+    if plotlabeler.colorrange:
+        plot_out = plt.hexbin(x, y, C=value, \
+                                vmin=plotlabeler.colorrange[0], \
+                                vmax=plotlabeler.colorrange[1], \
+                                cmap=plotlabeler.colormap, \
+                                gridsize=gridsize, extent=extent)
+    else:
+        print x.shape
+        print y.shape
+        print value.shape
+        plot_out = plt.hexbin(x, y, C=value, \
+                                cmap=plotlabeler.colormap, \
+                                gridsize=gridsize, extent=extent)
 
     cb = plt.colorbar(plot_out, spacing='uniform',extend='max')
-    
     plt.title (plotlabeler.title)
     plt.xlabel(plotlabeler.xlabel)
     plt.ylabel(plotlabeler.ylabel)
-
     plt.tight_layout()
-
-
 
 def UpdateRunningMean2D(running_mean_mtx, running_weight_mtx, x, y, value, extent, gridsize, mtx_scale=100, style='hex'):
     if style=='hex':
     # Compute the mean RMSD per box and the weight of the box
-        meanplt   = plt.hexbin(r, z, C=C, \
-                cmap=colormap, mincnt=0, gridsize = gridsize, extent=extent) 
-        weightplt = plt.hexbin(r, z, \
-                cmap=colormap, mincnt=0, gridsize = gridsize, extent=extent) 
+        meanplt   = plt.hexbin(x, y, C=value, \
+                mincnt=0, gridsize = gridsize, extent=extent) 
+        weightplt = plt.hexbin(x, y, \
+                mincnt=0, gridsize = gridsize, extent=extent) 
     else:
         raise ValueError("Plotting style must be 'hex', received {}". format(style))
     plt.clf()
-    
     #plt.show()
     mean   = meanplt.get_array()
     weight = weightplt.get_array()
     #print "mean shape, weight shape: {}, {}".format(hex_mean.shape, hex_weight.shape)
-    mean_pos   =  mtx_scale * (meanplt.get_offsets()   + np.array([0,z_extent]))
-    weight_pos =  mtx_scale * (weightplt.get_offsets() + np.array([0,z_extent]))
+    mean_pos   =  mtx_scale * (meanplt.get_offsets()   + np.array([0,extent[3]]))
+    weight_pos =  mtx_scale * (weightplt.get_offsets() + np.array([0,extent[3]]))
     mean_pos.astype(int)
     weight_pos.astype(int)
-    
-    mean_mtx   = mtx.csr_matrix( (hex_mean  , (mean_pos[:,0],   mean_pos[:,1]  )), dtype='f')
-    weight_mtx = mtx.csr_matrix( (hex_weight, (weight_pos[:,0], weight_pos[:,1])) )
-
+    mean_mtx   = mtx.csr_matrix( (mean  , (mean_pos[:,0],   mean_pos[:,1]  )), dtype='f')
+    weight_mtx = mtx.csr_matrix( (weight, (weight_pos[:,0], weight_pos[:,1])) )
     if running_mean_mtx == None and running_weight_mtx == None:
         running_mean_mtx   = mean_mtx.multiply(weight_mtx)
         running_weight_mtx = weight_mtx
     else:
         running_mean_mtx   = running_mean_mtx + mean_mtx.multiply(weight_mtx)
         running_weight_mtx = running_weight_mtx + weight_mtx
-
     return running_mean_mtx, running_weight_mtx
 
 
-def ProcessSparseRunner(running_mean, running_weight, coord='cyl'):
+def ProcessSparseRunner(running_mean, running_weight, mtx_scale, z_extent, coord='cyl'):
     running_mean = running_mean / running_weight
-
     running_mean   = running_mean.tocoo()
     running_weight = running_weight.tocoo()
     #print "RUNNING MEAN TYPE: {}".format(type(running_mean_mtx))
     #print "RUNNING MEAN DATA: {}".format(running_mean_mtx)
     data_pos  = np.vstack((running_mean.row,running_mean.col)).astype(float).T / mtx_scale
     data_pos -= np.array([0,z_extent])
-    mean_data = running_mean.data
-    density_pos = np.vstack((running_weight.row,running_weight.col)).astype(float).T / mtx_scale
-    density_pos -= np.array([0,z_extent])
-    if coord='cyl':
-        mean_density = running_weight.data / density_pos[:,0]
+    weight_pos = np.vstack((running_weight.row,running_weight.col)).astype(float).T / mtx_scale
+    weight_pos -= np.array([0,z_extent])
+
+    if coord=='cyl':
+        weight_mean = running_weight.data / weight_pos[:,0]
     else:
         raise ValueError("ProcessSparseRunner can only handle coord='cyl', passed {}".format(coord))
-
-    return (running_mean.data, data_pos), (mean_density, density_pos)
+    return (running_mean.data, data_pos), (weight_mean, weight_pos)
 
 
 def GridOPRadial(data_tik, display_type=[], colorrange=[None,None], op_type='q6', \
                    file_name=None, rmsd_lambda=None, colormap=plt.cm.Spectral_r):
-
     atom_type = 'water'
     running_mean_mtx = None
     running_weight_mtx = None
-
     gridsize = [40,30]
     r_extent = 10.0
     z_extent = 4.0
     water_pos = 83674
     ion_pos  = 423427
-
     mtx_scale = max(gridsize[0] / r_extent, gridsize[1] / (2 * z_extent)) * 100
-
     for t0 in xrange(data_tik.shape[0]):
         print "outputting time {} of {}".format(t0, data_tik.shape[0])
-        
         # PRE-FILTER
         if atom_type == 'water':
             atoms_i = data_tik[t0,water_pos:ion_pos,:]
         else:
             raise ValueError("GridRMSDRadial passed atom_type that is not known: {}".format(atom_type))
-
         # Run the appropriate computation on those atoms
         if op_type == 'q6':
             op_i = ComputeQ6(atoms_i, cutoff_A=4.0)
@@ -180,51 +173,52 @@ def GridOPRadial(data_tik, display_type=[], colorrange=[None,None], op_type='q6'
             op_i = np.ones(atoms_i.shape)
         else:
             raise ValueError("GridOPRadial passed op_type that is not known: {}".format(op_type))
-        
         # POST-FILTER
         if atom_type == 'water':
             atoms_i = atoms_i[::3]
             op_i    = op_i[::3]
         else:
             raise ValueError("GridOPRadial passed atom_type that is not known: {}".format(op_type))
-
         # Convert to cylindrical coords and center
         center_k = np.mean(data_tik[t0,:,:], axis=0)
         r_ik = atoms_i - center_k
         r_cyl_i = np.sqrt( np.square(r_ik[:,0]) + np.square(r_ik[:,1]))
         z_cyl_i = r_ik[:,2]
-       
-        
         # Truncate to relevant regions of the box
         extent = [0, r_extent, -z_extent, z_extent]
-        sub = (r < r_extent) * (np.abs(z) < z_extent)
-
-        running_mean_mtx, running_weight_mtx = UpdateRunningMean(running_mean_mtx, running_weight_mtx, r, z, op_i, mtx_scale=100)
-
-    
-    (data, data_pos), (density,density_pos) = ProcessSparseRunner(running_mean_mtx, running_weight_mtx, coord='cyl')
-
-
+        sub = (r_cyl_i < r_extent) * (np.abs(z_cyl_i) < z_extent)
+        r    = r_cyl_i[sub]
+        z    = z_cyl_i[sub]
+        op_i = op_i[sub]
+        running_mean_mtx, running_weight_mtx = UpdateRunningMean2D(running_mean_mtx, running_weight_mtx, r, z, op_i, \
+                                                                    extent, gridsize, mtx_scale=mtx_scale)
+    (data, data_pos), (density,density_pos) = ProcessSparseRunner(running_mean_mtx, running_weight_mtx, mtx_scale, z_extent, coord='cyl')
     # Plot the protein structure
-    center_k = np.mean(data_tik[:,0:water_pos,:], axis=(0,1))
-    protein_r = np.sqrt(np.square(data_tik[0,0:water_pos,0] - center_k[0]) + \
-                        np.square(data_tik[0,0:water_pos,1] - center_k[1]) )
-    protein_z = data_tik[0,0:water_pos,2] - center_k[2]
-    sub = (protein_r < r_extent) * (np.abs(protein_z) < z_extent)
+    # center_k = np.mean(data_tik[:,0:water_pos,:], axis=(0,1))
+    # protein_r = np.sqrt(np.square(data_tik[0,0:water_pos,0] - center_k[0]) + \
+    #                     np.square(data_tik[0,0:water_pos,1] - center_k[1]) )
+    # protein_z = data_tik[0,0:water_pos,2] - center_k[2]
+    # sub = (protein_r < r_extent) * (np.abs(protein_z) < z_extent)
 
-    if rmsd_lambda.title:
+    # Build the plotlabeler
+    if rmsd_lambda:
         title=rmsd_lambda.title
+    elif op_type=='q6':
+        title='q6 plot'
+    else:
+        title='Some generic order parameter plot'
     plotlabeler=PlotLabeler(title=title, \
                             xlabel="R, cylindrical radius from center of disc (nm)", \
                             ylabel="Z, vertical height (nm)", \
                             colormap = colormap, \
                             colorrange = colorrange)
 
+    # Plot images
     OPPlotter2D(data_pos[:,0],data_pos[:,1], data, \
-                extent, gridsize, plotlabeler=plotlabeler, subplot=(2,1,1)):
+                extent, gridsize, plotlabeler=plotlabeler, subplot=(2,1,1))
     plotlabeler.title = "Density, no units"
     OPPlotter2D(density_pos[:,0],density_pos[:,1], density, \
-                extent, gridsize, plotlabeler=plotlabeler, subplot=(2,1,2)):
+                extent, gridsize, plotlabeler=plotlabeler, subplot=(2,1,2))
 
     if 'png' in display_type:
         if file_name:

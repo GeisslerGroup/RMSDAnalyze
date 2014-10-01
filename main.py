@@ -92,7 +92,7 @@ def main():
                     colormap=colormap)
 
         if args.op_grid:
-            GRID.GridOPRadial(ds, display_type = args.op_grid, colorrange=args.rmsd_colorrange, op_type=args.op_type, \
+            GRID.GridOPRadial(ds[0:3,:,:], display_type = args.op_grid, colorrange=args.rmsd_colorrange, op_type=args.op_type, \
                     file_name=args.op_grid_file, rmsd_lambda = None, colormap=colormap)
 
 if __name__ == "__main__":
