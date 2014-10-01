@@ -69,9 +69,8 @@ def ComputeQ6(atoms_i, cutoff_A):
     return np.ones(atoms_i.shape)
 
 
-def GridOPRadial(data_tik, display_type=[], colorrange=None, rmsd_type='rmsd', \
-                   file_name=None, rmsd_lambda=None, time_init=0.0, time_step=0.0,\
-                   colormap=plt.cm.Spectral_r):
+def GridOPRadial(data_tik, display_type=[], colorrange=None, op_type='q6', \
+                   file_name=None, rmsd_lambda=None, colormap=plt.cm.Spectral_r):
     if colorrange==None:
         colorrange=[None,None]
     atom_type = 'water'
@@ -119,12 +118,10 @@ def GridOPRadial(data_tik, display_type=[], colorrange=None, rmsd_type='rmsd', \
         if atom_type == 'water':
             r = r_cyl_i[::3]
             z = z_cyl_i[::3]
-            if rmsd_type=='rmsd':
+            if op_type=='q6' or op_type=='density':
                 C = op_i[::3]
-            elif rmsd_type=='angle':
-                C = op_i
             else:
-                raise ValueError("GridRMSDRadial passed rmsd_type that is not known: {}".format(rmsd_type))
+                raise ValueError("GridOPRadial passed op_type that is not known: {}".format(op_type))
 
         # Compute the extent of the box
         extent = [0, r_extent, -z_extent, z_extent]
@@ -208,7 +205,7 @@ def GridOPRadial(data_tik, display_type=[], colorrange=None, rmsd_type='rmsd', \
     plt.subplot(2,1,2)
     binx = verts_density[:,0]
     biny = verts_density[:,1]
-    density_out = plt.hexbin(binx,biny,C=mean_density/(data_tik.shape[0]-rmsd_step), \
+    density_out = plt.hexbin(binx,biny,C=mean_density/(data_tik.shape[0]), \
                              cmap=colormap, gridsize=gridsize, extent=extent)
     cb = plt.colorbar(density_out, spacing='uniform',extend='max')
     plt.plot(protein_r[sub], protein_z[sub], '-k', alpha=.3)
@@ -228,8 +225,7 @@ def GridOPRadial(data_tik, display_type=[], colorrange=None, rmsd_type='rmsd', \
 
 
 def GridRMSDRadial(data_tik, rmsd_step, display_type=[], colorrange=None, rmsd_type='rmsd', \
-                   file_name=None, rmsd_lambda=None, time_init=0.0, time_step=0.0,\
-                   colormap=plt.cm.Spectral_r):
+                   file_name=None, rmsd_lambda=None, colormap=plt.cm.Spectral_r):
     if colorrange==None:
         colorrange=[None,None]
     atom_type = 'water'

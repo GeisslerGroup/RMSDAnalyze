@@ -1,4 +1,4 @@
-import RMSDAnalyze.grid
+import RMSDAnalyze.grid as GRID
 import RMSDAnalyze.atomic
 import RMSDAnalyze.convert
 import argparse
@@ -23,6 +23,7 @@ def main():
 
     parser.add_argument("-op_grid", type=str, nargs='+', choices=['display','png'], default=None, help="Output type for op_grid")
     parser.add_argument("-op_type", type=str, choices=['q6','density'], default='density',help='Type of RMSD calculation to perform')
+    parser.add_argument("-op_grid_file", type=str, default=None, help="Filename base for RMSD grid. If none passed, default file name is \'default_xxps.png\'.")
 
     parser.add_argument("-act_out", type=str, help="File output destination for activity XYZ calculation")
     parser.add_argument("-act_dt", type=float, help="dt between activity calculations, converted to frames by rounding")
@@ -39,7 +40,7 @@ def main():
     hdffile = config.get('HDF','file')
     hdfatom = config.get('HDF','atom_dset')
     colormap= config.get('plotting','colormap')
-    colormap= plt.cm.get_cmap(colormap)
+    molormap= plt.cm.get_cmap(colormap)
 
     if args.gro and args.trr:
         raise ValueError("Cannot load from both .gro and .trr; select only one!")
@@ -47,8 +48,6 @@ def main():
         RMSDAnalyze.convert.trr2hdf5(args.trr, hdffile, hdfatom)
     if args.gro != None:
         RMSDAnalyze.convert.gro2hdf5(args.gro, hdffile, hdfatom)
-
-
 
     if args.gro_copy:
         print "Creating a copy of frames {} of {} with grocopy".format(args.gro_frames, args.gro_copy[0])
@@ -72,7 +71,7 @@ def main():
             rmsd_lambda = None
             if args.rmsd_activityparm:
                 print "Creating RMSDLambda to compute activity"
-                rmsd_lambda = RMSDAnalyze.grid.RMSDLambda(
+                rmsd_lambda = GRID.RMSDLambda(
                                         b_activity = True,                 \
                                         b_scaletime = args.rmsd_scaletime, \
                                         rmsd_delay = args.rmsd_dt,         \
@@ -81,16 +80,20 @@ def main():
                 rmsd_lambda.SetTitle(args.rmsd_type)
             elif args.rmsd_scaletime:
                 print "Creating RMSDLambda to scale time"
-                rmsd_lambda = RMSDAnalyze.grid.RMSDLambda(
+                rmsd_lambda = GRID.RMSDLambda(
                                         b_activity = False,                \
                                         b_scaletime = args.rmsd_scaletime, \
                                         rmsd_delay = args.rmsd_dt)
                 rmsd_lambda.SetTitle(args.rmsd_type)
             if 'png' in args.rmsd_grid and args.rmsd_grid_file == None:
                 args.rmsd_grid_file = "default_{}ps".format(args.rmsd_dt)
-            RMSDAnalyze.grid.GridRMSDRadial(ds,rmsd_dT, rmsd_type=args.rmsd_type, colorrange=args.rmsd_colorrange, \
+            GRID.GridRMSDRadial(ds,rmsd_dT, rmsd_type=args.rmsd_type, colorrange=args.rmsd_colorrange, \
                     display_type = args.rmsd_grid, file_name=args.rmsd_grid_file, rmsd_lambda = rmsd_lambda, \
                     colormap=colormap)
+
+        if args.op_grid:
+            GRID.GridOPRadial(ds, display_type = args.op_grid, colorrange=args.rmsd_colorrange, op_type=args.op_type, \
+                    file_name=args.op_grid_file, rmsd_lambda = None, colormap=colormap)
 
 if __name__ == "__main__":
     main()
