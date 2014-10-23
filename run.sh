@@ -28,7 +28,7 @@ IMG_DIR=$HOME/Dropbox/Public/2014-10-06-activity
 #done
 
 
-times=(19.9)
+times=(20.0)
 
 for i in ${times[@]}; do
     FNAME=rmsd_act
