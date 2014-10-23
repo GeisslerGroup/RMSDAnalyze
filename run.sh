@@ -45,19 +45,19 @@ DIR=$HOME/Dropbox/Public/2014-10-06-activity
 mkdir $DIR
 for i in ${times[@]}; do
     FNAME=angle_act
-    python main.py -rmsd_grid png -rmsd_dt $i -rmsd_type angle -rmsd_activityparm 1.2 20 -rmsd_grid_file $FNAME -rmsd_colorrange .1 .9
+    python interface.py -rmsd_grid png -rmsd_dt $i -rmsd_type angle -rmsd_activityparm 1.2 20 -rmsd_grid_file $FNAME -rmsd_colorrange .1 .9
     mv $FNAME.png $DIR/$FNAME."$i"ps.png
 done
 
 for i in ${times[@]}; do
     FNAME=rmsd_act
-    python main.py -rmsd_grid png -rmsd_dt $i -rmsd_type rmsd -rmsd_activityparm .38 20 -rmsd_grid_file $FNAME -rmsd_colorrange .1 .9
+    python interface.py -rmsd_grid png -rmsd_dt $i -rmsd_type rmsd -rmsd_activityparm .38 20 -rmsd_grid_file $FNAME -rmsd_colorrange .1 .9
     mv $FNAME.png $DIR/$FNAME."$i"ps.png
 done
 
 for i in ${times[@]}; do
     FNAME=diff_act
-    python main.py -rmsd_grid png -rmsd_dt $i -rmsd_type rmsd -rmsd_scaletime -rmsd_activityparm .12 20 -rmsd_grid_file $FNAME -rmsd_colorrange .1 .9
+    python interface.py -rmsd_grid png -rmsd_dt $i -rmsd_type rmsd -rmsd_scaletime -rmsd_activityparm .12 20 -rmsd_grid_file $FNAME -rmsd_colorrange .1 .9
     mv $FNAME.png $DIR/$FNAME."$i"ps.png
 done
 
