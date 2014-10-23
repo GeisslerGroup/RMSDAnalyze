@@ -2,3 +2,5 @@ image
 data
 *.swp
 *.pyc
+*.gro
+*.hdf5

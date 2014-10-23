@@ -1,3 +1,7 @@
+import matplotlib
+remote=True
+if remote:
+    matplotlib.use('Agg')
 import RMSDAnalyze.grid as GRID
 import RMSDAnalyze.atomic
 import RMSDAnalyze.convert

@@ -2,4 +2,4 @@
 file = data/test.hdf5
 atom_dset = atoms
 [plotting]
-colormap=Spectral_r
+colormap=Reds
