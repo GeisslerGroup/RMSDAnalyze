@@ -47,6 +47,42 @@ class PlotLabeler:
         self.colorrange=colorrange
         self.colormap=colormap
 
+
+class SlabCoords:
+    def __init__(self, r_extent, z_extent, thickness=1):
+        self.r_extent = r_extent
+        self.z_extent = z_extent
+        self.thickness = thickness
+    def GetMtxScale(self, gridsize):
+        return max(gridsize[0] / self.r_extent, gridsize[1] / (2 * self.z_extent)) * 100
+    def ProcessSparseRunner(self, running_mean, running_weight, mtx_scale):
+        extent = self.GetExtent()
+        running_mean   = mtx.csr_matrix(running_mean/running_weight)
+        running_mean   = running_mean.tocoo()
+        running_weight = running_weight.tocoo()
+        #print "RUNNING MEAN TYPE: {}".format(type(running_mean_mtx))
+        #print "RUNNING MEAN DATA: {}".format(running_mean_mtx)
+        data_pos  = np.vstack((running_mean.row,running_mean.col)).astype(float).T / mtx_scale
+        data_pos += np.array([extent[0],extent[2]])
+        weight_pos = np.vstack((running_weight.row,running_weight.col)).astype(float).T / mtx_scale
+        weight_pos += np.array([extent[0],extent[2]])
+        weight_mean = running_weight.data
+        return (running_mean.data, data_pos), (weight_mean, weight_pos)
+    def GetExtent(self):
+        return [-self.r_extent, self.r_extent, -self.z_extent, self.z_extent]
+    def __call__(self, r_ik, op_i=None):
+        # Truncate to relevant regions of the box
+        sub = ((np.abs(r_ik[:, 0]) < self.r_extent) * 
+               (np.abs(r_ik[:, 2]) < self.z_extent) *
+               (np.abs(r_ik[:, 1]) < self.thickness))
+        r    = r_ik[sub,0]
+        z    = r_ik[sub,2]
+        if op_i != None:
+            op_i = op_i[sub]
+            return r, z, op_i
+        else:
+            return r, z
+
 class RadialCoords:
     def __init__(self, r_extent, z_extent):
         self.r_extent = r_extent
@@ -60,9 +96,9 @@ class RadialCoords:
         #print "RUNNING MEAN TYPE: {}".format(type(running_mean_mtx))
         #print "RUNNING MEAN DATA: {}".format(running_mean_mtx)
         data_pos  = np.vstack((running_mean.row,running_mean.col)).astype(float).T / mtx_scale
-        data_pos -= np.array([0,self.z_extent])
+        data_pos += np.array([extent[0],extent[2]])
         weight_pos = np.vstack((running_weight.row,running_weight.col)).astype(float).T / mtx_scale
-        weight_pos -= np.array([0,self.z_extent])
+        weight_pos += np.array([extent[0],extent[2]])
         weight_mean = running_weight.data / weight_pos[:,0]
         return (running_mean.data, data_pos), (weight_mean, weight_pos)
     def GetExtent(self):
@@ -107,6 +143,7 @@ def ComputeRMSAngle(r0_ik, r1_ik, rmsd_lambda = None):
     return rmsd_lambda(theta)
 
 def ComputeQ6(r_ik, cutoff_A):
+    raise NotImplementedError("q6 order parameter not implemented")
     nbrs = NearestNeighbors(n_neighbors=4, algorithm='ball_tree').fit(r_ik)
     return np.ones(atoms_i.shape)
 
@@ -146,8 +183,8 @@ def UpdateRunningMean2D(running_mean_mtx, running_weight_mtx, x, y, value, exten
     mean   = meanplt.get_array()
     weight = weightplt.get_array()
     #print "mean shape, weight shape: {}, {}".format(hex_mean.shape, hex_weight.shape)
-    mean_pos   =  mtx_scale * (meanplt.get_offsets()   + np.array([0,extent[3]]))
-    weight_pos =  mtx_scale * (weightplt.get_offsets() + np.array([0,extent[3]]))
+    mean_pos   =  mtx_scale * (meanplt.get_offsets()   - np.array([extent[0],extent[2]]))
+    weight_pos =  mtx_scale * (weightplt.get_offsets() - np.array([extent[0],extent[2]]))
     mean_pos.astype(int)
     weight_pos.astype(int)
     mean_mtx   = mtx.csr_matrix( (mean  , (mean_pos[:,0],   mean_pos[:,1]  )), dtype='f')
@@ -163,7 +200,7 @@ def UpdateRunningMean2D(running_mean_mtx, running_weight_mtx, x, y, value, exten
 
 def GridOPRadial_v2(data_tik, display_type=[], dynamic_step = 0, colorrange=[None,None], op_type='density', \
                    file_name=None, rmsd_lambda=None, colormap=plt.cm.Spectral_r, \
-                   water_pos=83674, ion_pos = 423427, coord_system = RadialCoords(10.0, 4.0), gridsize=[40,30]):
+                   water_pos=83674, ion_pos = 423427, coord_system = SlabCoords(10.0, 4.0), gridsize=[40,30]):
     dynamic=['rmsd','angle']
     static=['q6','density']
     if dynamic_step > 0 and op_type in static:
