@@ -1,54 +1,69 @@
 import grid
+import numpy as np
+
+class LocalSlabCoords:
+    def __init__(self, r_0, r_f, z_0, z_f, thickness=1):
+        self.extent = [r_0, r_f, z_0, z_f]
+        self.thickness = thickness
+    def GetMtxScale(self, gridsize):
+        return max(gridsize[0] / self.r_extent, gridsize[1] / (2 * self.z_extent)) * 100
+    def ProcessSparseRunner(self, running_mean, running_weight, mtx_scale):
+        extent = self.GetExtent()
+        running_mean   = mtx.csr_matrix(running_mean/running_weight)
+        running_mean   = running_mean.tocoo()
+        running_weight = running_weight.tocoo()
+        #print "RUNNING MEAN TYPE: {}".format(type(running_mean_mtx))
+        #print "RUNNING MEAN DATA: {}".format(running_mean_mtx)
+        data_pos  = np.vstack((running_mean.row,running_mean.col)).astype(float).T / mtx_scale
+        data_pos += np.array([extent[0],extent[2]])
+        weight_pos = np.vstack((running_weight.row,running_weight.col)).astype(float).T / mtx_scale
+        weight_pos += np.array([extent[0],extent[2]])
+        weight_mean = running_weight.data
+        return (running_mean.data, data_pos), (weight_mean, weight_pos)
+    def GetExtent(self):
+        return self.extent
+    def __call__(self, r_ik, op_i=None):
+        # Truncate to relevant regions of the box
+        sub = ((np.abs(r_ik[:, 0]) > self.extent[0]) * 
+               (np.abs(r_ik[:, 0]) < self.extent[1]) *
+               (np.abs(r_ik[:, 2]) > self.extent[2]) *
+               (np.abs(r_ik[:, 2]) < self.extent[3]) *
+               (np.abs(r_ik[:, 1]) < self.thickness/2.0))
+        r    = r_ik[sub,0]
+        z    = r_ik[sub,2]
+        if op_i != None:
+            op_i = op_i[sub]
+            return r, z, op_i
+        else:
+            return r, z
 
 
 def LocalOP(data_tik, dynamic_step = 0, op_type='density', \
                    rmsd_lambda=None, water_pos=83674, ion_pos = 423427, 
-                   coord_system = [RadialCoords(10.0, 4.0)], gridsize=[40,30], nbins):
-    dynamic=['rmsd','angle']
-    static=['q6','density']
-    if dynamic_step > 0 and op_type in static:
+                   coord_system = [grid.RadialCoords(10.0, 4.0)], n_bins=100):
+    atom_type = 'water'
+
+    if dynamic_step > 0 and op_type in grid.static_op:
         raise ValueError("Cannot use a dynamic step {} > 0 with an op_type {}".format(dynamic_step, op_type))
-    if dynamic_step == 0 and op_type in dynamic:
+    if dynamic_step == 0 and op_type in grid.dynamic_op:
         raise ValueError("Cannot use a dynamic step == 0 with an op_type {}".format(dynamic_step, op_type))
 
-    atom_type = 'water'
-    running_mean_mtx = None
-    running_weight_mtx = None
-    mtx_scale = coord_system.GetMtxScale(gridsize)
-    dist = np.zeros(len(coord_system),
-                    data_tik.shape[0] - dynamic_step,
-                    n_bins)
+
+    op_distribution = np.zeros(len(coord_system),
+            data_tik.shape[0] - dynamic_step,
+            n_bins)
+    op_bins = np.zeros(len(coord_system),
+            data_tik.shape[0] - dynamic_step,
+            2)
     for t0 in xrange(data_tik.shape[0] - dynamic_step):
         print "outputting time {} of {}".format(t0, data_tik.shape[0])
         atoms = [data_tik[t0,:,:]]
         if op_type in dynamic:
             atoms.append(data_tik[t0+dynamic_step,:,:])
-        # PRE-FILTER
-        if atom_type == 'water':
-            for i in xrange(len(atoms)):
-                atoms[i] = atoms[i][water_pos:ion_pos:,:]
-        else:
-            raise ValueError("GridOPRadial passed atom_type that is not known: {}".format(atom_type))
-        if op_type != 'angle' and atom_type =='water':
-            for i in xrange(len(atoms)):
-                atoms[i] = atoms[i][::3]
-        # Run the appropriate computation on those atoms
-        if   op_type == 'q6':
-            op_i = ComputeQ6(atoms[0], cutoff_A=4.0)
-        elif op_type == 'density':
-            op_i = np.ones(atoms[0].shape)
-        elif op_type == 'rmsd':
-            op_i = ComputeRMSD(atoms[0], atoms[1], post_cutoff=5.0, rmsd_lambda = rmsd_lambda)
-        elif op_type == 'angle':
-            op_i = ComputeRMSAngle(atoms[0], atoms[1], rmsd_lambda = rmsd_lambda)
-        else:
-            raise ValueError("GridOPRadial passed op_type that is not known: {}".format(op_type))
-        # POST-FILTER
-        if op_type == 'angle' and atom_type == 'water':
-            atoms[0] = atoms[0][::3]
-        # Convert to cylindrical coords and center
-        center_k = np.mean(data_tik[t0,:,:], axis=0)
-        r_ik = atoms[0] - center_k
+        atoms, op_i = grid.OPCompute(atoms, atom_type, op_type, water_pos, ion_pos, rmsd_lambda)
         for i,cs in enumerate(coord_system):
-            r,z,op_i = coord_system(r_ik, op_i)
-            #dist[i, t0, :] = np.hist(
+            hist, bins = np.histogram(op_i, bins=n_bins, density=True)
+            op_distribution[i, t0,:] = hist[:]
+            op_bins[i,t0,0], op_bins[i,t0,1] = bins[0], bins[-1]
+
+    return op_distribution, op_bins

@@ -5,6 +5,9 @@ import scipy.sparse as mtx
 import numpy.linalg as LA
 from sklearn.neighbors import NearestNeighbors
 
+dynamic_op=['rmsd','angle']
+static_op=['q6','density']
+
 class RMSDLambda:
     def __init__(self, b_scaletime, b_activity, rmsd_delay=0, cutoff=0, sharpness=0,title=None):
         self.b_scaletime = b_scaletime
@@ -198,14 +201,41 @@ def UpdateRunningMean2D(running_mean_mtx, running_weight_mtx, x, y, value, exten
     return running_mean_mtx, running_weight_mtx
 
 
-def GridOPRadial_v2(data_tik, display_type=[], dynamic_step = 0, colorrange=[None,None], op_type='density', \
+
+def OPCompute(atoms, atom_type, op_type, water_pos, ion_pos, rmsd_lambda):
+    # PRE-FILTER
+    if atom_type == 'water':
+        for i in xrange(len(atoms)):
+            atoms[i] = atoms[i][water_pos:ion_pos:,:]
+    else:
+        raise ValueError("GridOPRadial passed atom_type that is not known: {}".format(atom_type))
+    if op_type != 'angle' and atom_type =='water':
+        for i in xrange(len(atoms)):
+            atoms[i] = atoms[i][::3]
+    # Run the appropriate computation on those atoms
+    if   op_type == 'q6':
+        op_i = ComputeQ6(atoms[0], cutoff_A=4.0)
+    elif op_type == 'density':
+        op_i = np.ones(atoms[0].shape)
+    elif op_type == 'rmsd':
+        op_i = ComputeRMSD(atoms[0], atoms[1], post_cutoff=5.0, rmsd_lambda = rmsd_lambda)
+    elif op_type == 'angle':
+        op_i = ComputeRMSAngle(atoms[0], atoms[1], rmsd_lambda = rmsd_lambda)
+    else:
+        raise ValueError("GridOPRadial passed op_type that is not known: {}".format(op_type))
+    # POST-FILTER
+    if op_type == 'angle' and atom_type == 'water':
+        atoms[0] = atoms[0][::3]
+    # Convert to cylindrical coords and center
+    return atoms, op_i
+
+
+def GridOP(data_tik, display_type=[], dynamic_step = 0, colorrange=[None,None], op_type='density', \
                    file_name=None, rmsd_lambda=None, colormap=plt.cm.Spectral_r, \
                    water_pos=83674, ion_pos = 423427, coord_system = SlabCoords(10.0, 4.0), gridsize=[40,30]):
-    dynamic=['rmsd','angle']
-    static=['q6','density']
-    if dynamic_step > 0 and op_type in static:
+    if dynamic_step > 0 and op_type in static_op:
         raise ValueError("Cannot use a dynamic step {} > 0 with an op_type {}".format(dynamic_step, op_type))
-    if dynamic_step == 0 and op_type in dynamic:
+    if dynamic_step == 0 and op_type in dynamic_op:
         raise ValueError("Cannot use a dynamic step == 0 with an op_type {}".format(dynamic_step, op_type))
 
     atom_type = 'water'
@@ -215,31 +245,9 @@ def GridOPRadial_v2(data_tik, display_type=[], dynamic_step = 0, colorrange=[Non
     for t0 in xrange(data_tik.shape[0] - dynamic_step):
         print "outputting time {} of {}".format(t0, data_tik.shape[0])
         atoms = [data_tik[t0,:,:]]
-        if op_type in dynamic:
+        if op_type in dynamic_op:
             atoms.append(data_tik[t0+dynamic_step,:,:])
-        # PRE-FILTER
-        if atom_type == 'water':
-            for i in xrange(len(atoms)):
-                atoms[i] = atoms[i][water_pos:ion_pos:,:]
-        else:
-            raise ValueError("GridOPRadial passed atom_type that is not known: {}".format(atom_type))
-        if op_type != 'angle' and atom_type =='water':
-            for i in xrange(len(atoms)):
-                atoms[i] = atoms[i][::3]
-        # Run the appropriate computation on those atoms
-        if   op_type == 'q6':
-            op_i = ComputeQ6(atoms[0], cutoff_A=4.0)
-        elif op_type == 'density':
-            op_i = np.ones(atoms[0].shape)
-        elif op_type == 'rmsd':
-            op_i = ComputeRMSD(atoms[0], atoms[1], post_cutoff=5.0, rmsd_lambda = rmsd_lambda)
-        elif op_type == 'angle':
-            op_i = ComputeRMSAngle(atoms[0], atoms[1], rmsd_lambda = rmsd_lambda)
-        else:
-            raise ValueError("GridOPRadial passed op_type that is not known: {}".format(op_type))
-        # POST-FILTER
-        if op_type == 'angle' and atom_type == 'water':
-            atoms[0] = atoms[0][::3]
+        atoms, op_i = OPCompute(atoms, atom_type, op_type, water_pos, ion_pos, rmsd_lambda)
         # Convert to cylindrical coords and center
         center_k = np.mean(data_tik[t0,:,:], axis=0)
         r_ik = atoms[0] - center_k
@@ -248,6 +256,8 @@ def GridOPRadial_v2(data_tik, display_type=[], dynamic_step = 0, colorrange=[Non
         running_mean_mtx, running_weight_mtx = UpdateRunningMean2D(running_mean_mtx, running_weight_mtx, r, z, op_i, \
                                                                     extent, gridsize, mtx_scale=mtx_scale)
     (data, data_pos), (density,density_pos) = coord_system.ProcessSparseRunner(running_mean_mtx, running_weight_mtx, mtx_scale)
+
+    # PLOTTING FUNCTION -- should be separate function, but it shares too many arguments
     # Build the plotlabeler
     if rmsd_lambda:
         title=rmsd_lambda.title
@@ -280,4 +290,3 @@ def GridOPRadial_v2(data_tik, display_type=[], dynamic_step = 0, colorrange=[Non
             plt.savefig('default.png')
     if 'display' in display_type:
         plt.show()
-
