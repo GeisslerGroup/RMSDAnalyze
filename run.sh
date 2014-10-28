@@ -28,8 +28,7 @@ IMG_DIR=$HOME/Dropbox/Public/2014-10-06-activity
 #done
 
 
-times=(20.0)
-
+times=(0.2 0.4 0.6 0.8 1.0 1.5 2.0 2.5 3.0 3.5 4.0 5.0 7.5 10.0)
 for i in ${times[@]}; do
     FNAME=rmsd_act
     python interface.py -rmsd_grid png -rmsd_dt $i -rmsd_type angle -rmsd_activityparm 1.2 20 -rmsd_colorrange .1 .9 -rmsd_grid_file $FNAME

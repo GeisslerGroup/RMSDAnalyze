@@ -243,7 +243,7 @@ def GridOP(data_tik, display_type=[], dynamic_step = 0, colorrange=[None,None], 
     running_weight_mtx = None
     mtx_scale = coord_system.GetMtxScale(gridsize)
     for t0 in xrange(data_tik.shape[0] - dynamic_step):
-        print "outputting time {} of {}".format(t0, data_tik.shape[0])
+        #print "outputting time {} of {}".format(t0, data_tik.shape[0])
         atoms = [data_tik[t0,:,:]]
         if op_type in dynamic_op:
             atoms.append(data_tik[t0+dynamic_step,:,:])

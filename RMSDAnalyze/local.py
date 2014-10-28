@@ -40,7 +40,7 @@ class LocalSlabCoords:
 
 def LocalOP(data_tik, dynamic_step = 0, op_type='density', \
                    rmsd_lambda=None, water_pos=83674, ion_pos = 423427, 
-                   coord_system = [grid.RadialCoords(10.0, 4.0)], n_bins=100):
+                   coord_system = [grid.RadialCoords(10.0, 4.0)], bins=np.linspace(0,1,100)):
     atom_type = 'water'
 
     if dynamic_step > 0 and op_type in grid.static_op:
@@ -49,21 +49,14 @@ def LocalOP(data_tik, dynamic_step = 0, op_type='density', \
         raise ValueError("Cannot use a dynamic step == 0 with an op_type {}".format(dynamic_step, op_type))
 
 
-    op_distribution = np.zeros(len(coord_system),
-            data_tik.shape[0] - dynamic_step,
-            n_bins)
-    op_bins = np.zeros(len(coord_system),
-            data_tik.shape[0] - dynamic_step,
-            2)
+    op_distribution = np.zeros(len(bins) - 1)
     for t0 in xrange(data_tik.shape[0] - dynamic_step):
-        print "outputting time {} of {}".format(t0, data_tik.shape[0])
         atoms = [data_tik[t0,:,:]]
-        if op_type in dynamic:
+        if op_type in grid.dynamic_op:
             atoms.append(data_tik[t0+dynamic_step,:,:])
         atoms, op_i = grid.OPCompute(atoms, atom_type, op_type, water_pos, ion_pos, rmsd_lambda)
-        for i,cs in enumerate(coord_system):
-            hist, bins = np.histogram(op_i, bins=n_bins, density=True)
-            op_distribution[i, t0,:] = hist[:]
-            op_bins[i,t0,0], op_bins[i,t0,1] = bins[0], bins[-1]
+        hist, _ = np.histogram(op_i, bins=bins)
+        op_distribution[:] += hist[:]
 
-    return op_distribution, op_bins
+    return op_distribution
+
