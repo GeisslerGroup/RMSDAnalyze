@@ -77,7 +77,7 @@ class SlabCoords:
         # Truncate to relevant regions of the box
         sub = ((np.abs(r_ik[:, 0]) < self.r_extent) * 
                (np.abs(r_ik[:, 2]) < self.z_extent) *
-               (np.abs(r_ik[:, 1]) < self.thickness))
+               (np.abs(r_ik[:, 1]) < self.thickness/2.0))
         r    = r_ik[sub,0]
         z    = r_ik[sub,2]
         if op_i != None:

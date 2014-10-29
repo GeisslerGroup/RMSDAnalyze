@@ -51,9 +51,10 @@ def LocalOP(data_tik, dynamic_step = 0, op_type='density', \
 
     op_distribution = np.zeros(len(bins) - 1)
     for t0 in xrange(data_tik.shape[0] - dynamic_step):
-        atoms = [data_tik[t0,:,:]]
+        center_k = np.mean(data_tik[t0,:,:], axis=0)
+        atoms = [data_tik[t0,:,:] - center_k]
         if op_type in grid.dynamic_op:
-            atoms.append(data_tik[t0+dynamic_step,:,:])
+            atoms.append(data_tik[t0+dynamic_step,:,:] - center_k)
         atoms, op_i = grid.OPCompute(atoms, atom_type, op_type, water_pos, ion_pos, rmsd_lambda)
         _, _, op_i = coord_system(atoms[0], op_i)
         if len(op_i > 0):
