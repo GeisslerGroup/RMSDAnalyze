@@ -31,7 +31,7 @@ class LocalSlabCoords:
                (np.abs(r_ik[:, 1]) < self.thickness/2.0))
         r    = r_ik[sub,0]
         z    = r_ik[sub,2]
-        if op_i != None:
+        if op_i.any():
             op_i = op_i[sub]
             return r, z, op_i
         else:
@@ -55,8 +55,10 @@ def LocalOP(data_tik, dynamic_step = 0, op_type='density', \
         if op_type in grid.dynamic_op:
             atoms.append(data_tik[t0+dynamic_step,:,:])
         atoms, op_i = grid.OPCompute(atoms, atom_type, op_type, water_pos, ion_pos, rmsd_lambda)
-        hist, _ = np.histogram(op_i, bins=bins)
-        op_distribution[:] += hist[:]
+        _, _, op_i = coord_system(atoms[0], op_i)
+        if len(op_i > 0):
+            hist, _ = np.histogram(op_i, bins=bins)
+            op_distribution[:] += hist[:]
 
     return op_distribution
 
