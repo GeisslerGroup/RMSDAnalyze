@@ -24,10 +24,10 @@ class LocalSlabCoords:
         return self.extent
     def __call__(self, r_ik, op_i=None):
         # Truncate to relevant regions of the box
-        sub = ((np.abs(r_ik[:, 0]) > self.extent[0]) * 
-               (np.abs(r_ik[:, 0]) < self.extent[1]) *
-               (np.abs(r_ik[:, 2]) > self.extent[2]) *
-               (np.abs(r_ik[:, 2]) < self.extent[3]) *
+        sub = ((r_ik[:, 0] > self.extent[0]) * 
+               (r_ik[:, 0] < self.extent[1]) *
+               (r_ik[:, 2] > self.extent[2]) *
+               (r_ik[:, 2] < self.extent[3]) *
                (np.abs(r_ik[:, 1]) < self.thickness/2.0))
         r    = r_ik[sub,0]
         z    = r_ik[sub,2]

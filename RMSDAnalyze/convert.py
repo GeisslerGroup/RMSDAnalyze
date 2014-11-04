@@ -1,3 +1,4 @@
+import os 
 import numpy as np
 import h5py
 import MDAnalysis
@@ -93,14 +94,15 @@ def gro2hdf5(gro_in, hdf_out, hdf_atom):
 
     h5 = h5py.File(hdf_out,'w')
     ds = h5.create_dataset(hdf_atom, (N,atoms,3), dtype='f32')
+    ds.attrs['dt']=t1 - t0
     with open(gro_in) as f:
         for n in xrange(N):
-            print 'Frame ', n, "/", N
+            print 'Frame {} / {}'.format(n+1,N)
             l0 = f.next()
             l1 = f.next()
             for atom in xrange(atoms):
-                if atom % 100000 == 0:
-                    print "\tatom",atom
+                if atom % 100000 == 0 and atom != 0 :
+                    print "\tatom {}/{}".format(atom, atoms)
                 l = f.next()
                 pos = l[20:].strip()
                 pos = np.array([float(xyz) for xyz in pos.split()])

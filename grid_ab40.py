@@ -1,5 +1,5 @@
 import matplotlib
-matplotlib.use('Agg')
+#matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import ConfigParser
 import matplotlib.pyplot as plt
@@ -20,13 +20,8 @@ def main():
         print ds.shape
         print ds.attrs["dt"]
 
-        rmsd_dT = 20 # Units of "frames"
+        rmsd_dT = 2 # Units of "frames"
 
-        #rmsd_lambda = grid.RMSDLambda( b_activity = True,                 
-        #                               b_scaletime = True, 
-        #                               rmsd_delay = rmsd_dT * .1,         
-        #                               cutoff = .38,  
-        #                               sharpness = 12)
         rmsd_lambda = grid.RMSDLambda( b_activity = False,                 
                                        b_scaletime = False, 
                                        rmsd_delay = rmsd_dT * .1,         
@@ -34,14 +29,16 @@ def main():
                                        sharpness = 12)
         rmsd_lambda.SetTitle()
 
-        colorrange = [0, .5]
-        display_type = 'png'
-        file_name ="/home/jhaberstroh/Dropbox/Physics/subgroup/2014-10-28/TMV/real_cool_file"
+        coord_system = grid.SlabCoords(10.0, 4.0)
+
+        colorrange = [0, 1]
+        display_type = 'display'
+        file_name ="/home/jhaberstroh/Dropbox/Physics/subgroup/2014-10-28/ab_image"
 
         grid.GridOP(ds, dynamic_step=rmsd_dT, op_type='rmsd', 
                 colorrange=colorrange, display_type = display_type, 
                 file_name=file_name, rmsd_lambda = rmsd_lambda, 
-                colormap=colormap, coord_system = grid.SlabCoords(10.0, 4.0) )
+                colormap=colormap, coord_system = coord_system)
 
 
 if __name__ == "__main__":

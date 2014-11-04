@@ -1,5 +1,5 @@
 [HDF]
-file = data/test.hdf5
+file = /media/pup1/jhaberstroh/data/2014-11-ab40/ab40.hdf5
 atom_dset = atoms
 [plotting]
 colormap=Reds
