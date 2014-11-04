@@ -4,7 +4,7 @@ import ConfigParser
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("gro", type=str, help="File to convert.  e.g. -gro_copy traj.gro")
+    parser.add_argument("gro", type=str, help="File to convert.  e.g. traj.gro")
     parser.add_argument("-cfg", default='.RMSDAnalyze', type=str, help="Configuration file location. (Default = .RMSDAnalyze)")
     args = parser.parse_args()
 

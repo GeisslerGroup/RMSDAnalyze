@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as clr
 import scipy.sparse as mtx
 import numpy.linalg as LA
+import logging
 from sklearn.neighbors import NearestNeighbors
 
 dynamic_op=['rmsd','angle']
@@ -52,12 +53,23 @@ class PlotLabeler:
 
 
 class SlabCoords:
-    def __init__(self, r_extent, z_extent, thickness=1):
-        self.r_extent = r_extent
-        self.z_extent = z_extent
+    def __init__(self, dir1_extent, dir2_extent, dir1=0, dir2=2, thickness=1):
+        """
+        Select a region for all: abs(r[dir1]) < dir1_extent
+                                 abs(r[dir2]) < dir2_extent
+        Collapse the remaining direction for all atoms in a slab of dimension [thickness].
+        """
+        if (dir1 == dir2):
+            raise ValueError("In SlabCoords: dir1 ({}) cannot be equal to dir2 ({}).".format(dir1, dir2))
+        self.dir1     = dir1
+        self.dir2     = dir2
+        self.dir1_extent = dir1_extent
+        self.dir2_extent = dir2_extent
+        # dir_trunc computes the remaining direction
+        self.dir_trunc= sum([0,1,2]) - dir1 - dir2 
         self.thickness = thickness
     def GetMtxScale(self, gridsize):
-        return max(gridsize[0] / self.r_extent, gridsize[1] / (2 * self.z_extent)) * 100
+        return max(gridsize[0] / self.dir1_extent, gridsize[1] / (2 * self.dir2_extent)) * 100
     def ProcessSparseRunner(self, running_mean, running_weight, mtx_scale):
         extent = self.GetExtent()
         running_mean   = mtx.csr_matrix(running_mean/running_weight)
@@ -72,14 +84,14 @@ class SlabCoords:
         weight_mean = running_weight.data
         return (running_mean.data, data_pos), (weight_mean, weight_pos)
     def GetExtent(self):
-        return [-self.r_extent, self.r_extent, -self.z_extent, self.z_extent]
+        return [-self.dir1_extent, self.dir1_extent, -self.dir2_extent, self.dir2_extent]
     def __call__(self, r_ik, op_i=None):
         # Truncate to relevant regions of the box
-        sub = ((np.abs(r_ik[:, 0]) < self.r_extent) * 
-               (np.abs(r_ik[:, 2]) < self.z_extent) *
-               (np.abs(r_ik[:, 1]) < self.thickness/2.0))
-        r    = r_ik[sub,0]
-        z    = r_ik[sub,2]
+        sub = ((np.abs(r_ik[:, self.dir1     ]) < self.dir1_extent) * 
+               (np.abs(r_ik[:, self.dir2     ]) < self.dir2_extent) *
+               (np.abs(r_ik[:, self.dir_trunc]) < self.thickness/2.0))
+        r    = r_ik[sub,self.dir1]
+        z    = r_ik[sub,self.dir2]
         if op_i != None:
             op_i = op_i[sub]
             return r, z, op_i
@@ -170,9 +182,11 @@ def OPPlotter2D(x,y, value, extent, gridsize, plotlabeler=PlotLabeler, style='he
     plt.title (plotlabeler.title)
     plt.xlabel(plotlabeler.xlabel)
     plt.ylabel(plotlabeler.ylabel)
+    plt.axis('equal')
     plt.tight_layout()
 
 def UpdateRunningMean2D(running_mean_mtx, running_weight_mtx, x, y, value, extent, gridsize, mtx_scale=100, style='hex'):
+    logging.debug("Number of entries: {}".format(x.shape))
     if style=='hex':
     # Compute the mean RMSD per box and the weight of the box
         meanplt   = plt.hexbin(x, y, C=value, \
@@ -190,6 +204,8 @@ def UpdateRunningMean2D(running_mean_mtx, running_weight_mtx, x, y, value, exten
     weight_pos =  mtx_scale * (weightplt.get_offsets() - np.array([extent[0],extent[2]]))
     mean_pos.astype(int)
     weight_pos.astype(int)
+    logging.debug("Shape of mean-value data: {}".format(mean.shape))
+    logging.debug("Shape of weight data: {}".format(weight.shape))
     mean_mtx   = mtx.csr_matrix( (mean  , (mean_pos[:,0],   mean_pos[:,1]  )), dtype='f')
     weight_mtx = mtx.csr_matrix( (weight, (weight_pos[:,0], weight_pos[:,1])) )
     if running_mean_mtx == None and running_weight_mtx == None:
