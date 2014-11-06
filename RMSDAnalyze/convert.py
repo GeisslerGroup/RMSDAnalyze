@@ -2,6 +2,7 @@ import os
 import numpy as np
 import h5py
 import MDAnalysis
+import logging
 
 def tail(f, n, offset=0):
   command = "tail -n {} {}".format(n+offset, f)
@@ -106,6 +107,8 @@ def gro2hdf5(gro_in, hdf_out, hdf_atom):
                 l = f.next()
                 pos = l[20:].strip()
                 pos = np.array([float(xyz) for xyz in pos.split()])
+                if len(pos) != 3:
+                    logging.warning("Length of pos is wrong: pos = {}".format(pos))
                 ds[n,atom,:] = pos[:]
             lf = f.next()
     h5.close()

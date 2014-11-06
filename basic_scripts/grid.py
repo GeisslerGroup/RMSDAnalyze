@@ -1,14 +1,17 @@
 import matplotlib
-matplotlib.use('Agg')
+#matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import ConfigParser
 import matplotlib.pyplot as plt
 import h5py
 import RMSDAnalyze.grid as grid
+import logging
+
 
 def main():
+    logging.basicConfig(level=logging.DEBUG)
     config = ConfigParser.RawConfigParser()
-    config.read('.RMSDAnalyze')
+    config.read('RMSDAnalyze.cfg')
     hdffile = config.get('HDF','file')
     hdfatom = config.get('HDF','atom_dset')
     colormap= config.get('plotting','colormap')
@@ -20,7 +23,7 @@ def main():
         print ds.shape
         print ds.attrs["dt"]
 
-        rmsd_dT = 20 # Units of "frames"
+        rmsd_dT = 199 # Units of "frames"
 
         #rmsd_lambda = grid.RMSDLambda( b_activity = True,                 
         #                               b_scaletime = True, 
@@ -34,10 +37,10 @@ def main():
                                        sharpness = 12)
         rmsd_lambda.SetTitle()
 
-        coord_system = grid.SlabRadialCoords(10.0, 4.0)
+        coord_system = grid.SlabCoords(10.0, 4.0)
 
         colorrange = [0, .5]
-        display_type = 'png'
+        display_type = 'display'
         file_name ="/home/jhaberstroh/Dropbox/Physics/subgroup/2014-10-28/TMV/real_cool_file"
 
         grid.GridOP(ds, dynamic_step=rmsd_dT, op_type='rmsd', 
