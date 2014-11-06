@@ -177,11 +177,6 @@ def ProcessSparseRunner(running_mean, running_weight, extent, gridsize):
     running_mean   = running_mean[nonzero] / running_weight[nonzero]
     running_weight = running_weight[nonzero]
 
-    #TODO: Fix this reversal process
-    #TODO: Force the UpdateSparseRunner to use the GetMtxScale from the coords
-    #TODO: Move this function outside of the classes!
-    #print "RUNNING MEAN TYPE: {}".format(type(running_mean_mtx))
-    #print "RUNNING MEAN DATA: {}".format(running_mean_mtx)
     logging.debug("Matrix scale: {}, shape = {}".format(mtx_scale, mtx_scale.shape))
     logging.debug("Grid size: {}".format(gridsize))
     x = np.arange(0, 2*gridsize[0] + 1, dtype=float) / mtx_scale[0]
@@ -203,6 +198,8 @@ def CenterForMatrix(data, data_pos, extent, gridsize):
     data_pos = mtx_scale * ( data_pos - np.array([extent[0], extent[2]]))
     data_pos = np.abs(np.round(data_pos))
     data_pos = data_pos.astype(int)
+
+    # Include an index-column to the xy-data, and then sort on x,y
     index = np.arange(0, len(data_pos))
     index.shape = (len(data_pos), 1)
     merge = np.hstack([index,data_pos])
@@ -210,18 +207,7 @@ def CenterForMatrix(data, data_pos, extent, gridsize):
     data = data[merge.view(np.int)[:,0]] 
     data_pos = merge.view(np.int)[:,(1,2)]
     logging.debug("Sorted data_pos: x={}, y={}".format(data_pos[:,0], data_pos[:,1]))
-
-    #sort1 = data_pos[:,1].argsort()
-    #logging.debug("Sort1: {}, {}".format(sort1, sort1.shape))
-    #data     = data[sort1]
-    #data_pos = data_pos[sort1]
-    #logging.debug("Data_pos shape: {}".format(data_pos.shape))
-    #sort2 = data_pos[:,0].argsort()
-    #data     = data[sort2]
-    #data_pos = data_pos[sort2]
     return (data, data_pos)
-    
-
 
 def UpdateRunningMean2D(running_mean_mtx, running_weight_mtx, x, y, value, extent, gridsize, style='hex'):
     logging.debug("Number of entries: {}".format(x.shape))
@@ -255,7 +241,6 @@ def UpdateRunningMean2D(running_mean_mtx, running_weight_mtx, x, y, value, exten
         return running_mean_mtx, running_weight_mtx
     else:
         raise ValueError("Plotting style must be 'hex', received {}". format(style))
-
 
 
 def OPCompute(atoms, atom_type, op_type, water_pos, ion_pos, rmsd_lambda):
