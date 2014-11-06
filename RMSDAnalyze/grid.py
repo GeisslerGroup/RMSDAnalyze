@@ -51,12 +51,6 @@ class PlotLabeler:
         self.colorrange=colorrange
         self.colormap=colormap
 
-def GetMtxScale(extent, gridsize):
-    L = (extent[1] - extent[0], extent[3] - extent[2])
-    mtx_scale = np.array( [2.*float(gridsize[0]) / L[0],    
-                           2.*float(gridsize[1]) / L[1]] )
-    return mtx_scale
-
 class SlabCoords:
     def __init__(self, dir1_extent, dir2_extent, dir1=0, dir2=2, thickness=1):
         """
@@ -73,26 +67,6 @@ class SlabCoords:
         # dir_trunc computes the remaining direction
         self.dir_trunc= sum([0,1,2]) - dir1 - dir2 
         self.thickness = thickness
-    def ProcessSparseRunner(self, running_mean, running_weight, gridsize):
-        extent = self.GetExtent()
-        mtx_scale = GetMtxScale(self.GetExtent(), gridsize)
-        nonzero = (running_weight != 0)
-        running_mean   = running_mean[nonzero] / running_weight[nonzero]
-        running_weight = running_weight[nonzero]
-
-        #TODO: Fix this reversal process
-        #TODO: Force the UpdateSparseRunner to use the GetMtxScale from the coords
-        #TODO: Move this function outside of the classes!
-        #print "RUNNING MEAN TYPE: {}".format(type(running_mean_mtx))
-        #print "RUNNING MEAN DATA: {}".format(running_mean_mtx)
-        logging.debug("Matrix scale: {}, shape = {}".format(mtx_scale, mtx_scale.shape))
-        x = np.arange(0, 2*gridsize[0] + 1, dtype=float) / mtx_scale[0]
-        y = np.arange(0, 2*gridsize[1] + 1, dtype=float) / mtx_scale[1]
-        xv, yv = np.meshgrid(x,y)
-        data_x = xv[nonzero]
-        data_y = yv[nonzero]
-        data_pos = np.hstack(data_x, data_y)
-        return (running_mean, data_pos), (running_weight, data_pos)
     def GetExtent(self):
         return [-self.dir1_extent, self.dir1_extent, -self.dir2_extent, self.dir2_extent]
     def __call__(self, r_ik, op_i=None):
@@ -114,18 +88,6 @@ class RadialCoords:
         self.z_extent = z_extent
     def GetMtxScale(self, gridsize):
         return max(gridsize[0] / self.r_extent, gridsize[1] / (2 * self.z_extent)) * 100
-    def ProcessSparseRunner(self, running_mean, running_weight, mtx_scale):
-        running_mean = mtx.csr_matrix(running_mean/running_weight)
-        running_mean   = running_mean.tocoo()
-        running_weight = running_weight.tocoo()
-        #print "RUNNING MEAN TYPE: {}".format(type(running_mean_mtx))
-        #print "RUNNING MEAN DATA: {}".format(running_mean_mtx)
-        data_pos  = np.vstack((running_mean.row,running_mean.col)).astype(float).T / mtx_scale
-        data_pos += np.array([extent[0],extent[2]])
-        weight_pos = np.vstack((running_weight.row,running_weight.col)).astype(float).T / mtx_scale
-        weight_pos += np.array([extent[0],extent[2]])
-        weight_mean = running_weight.data / weight_pos[:,0]
-        return (running_mean.data, data_pos), (weight_mean, weight_pos)
     def GetExtent(self):
         return [0, self.r_extent, -self.z_extent, self.z_extent]
     def __call__(self, r_ik, op_i=None):
@@ -203,6 +165,64 @@ def OPPlotter2D(x,y, value, extent, gridsize, plotlabeler=PlotLabeler, style='he
     plt.axis('equal')
     plt.tight_layout()
 
+def GetMtxScale(extent, gridsize):
+    L = (extent[1] - extent[0], extent[3] - extent[2])
+    mtx_scale = np.array( [2.*float(gridsize[0]) / L[0],    
+                           2.*float(gridsize[1]) / L[1]] )
+    return mtx_scale
+
+def ProcessSparseRunner(running_mean, running_weight, extent, gridsize):
+    mtx_scale = GetMtxScale(extent, gridsize)
+    nonzero = (running_weight != 0)
+    running_mean   = running_mean[nonzero] / running_weight[nonzero]
+    running_weight = running_weight[nonzero]
+
+    #TODO: Fix this reversal process
+    #TODO: Force the UpdateSparseRunner to use the GetMtxScale from the coords
+    #TODO: Move this function outside of the classes!
+    #print "RUNNING MEAN TYPE: {}".format(type(running_mean_mtx))
+    #print "RUNNING MEAN DATA: {}".format(running_mean_mtx)
+    logging.debug("Matrix scale: {}, shape = {}".format(mtx_scale, mtx_scale.shape))
+    logging.debug("Grid size: {}".format(gridsize))
+    x = np.arange(0, 2*gridsize[0] + 1, dtype=float) / mtx_scale[0]
+    y = np.arange(0, 2*gridsize[1] + 1, dtype=float) / mtx_scale[1]
+    x += extent[0]
+    y += extent[2]
+    yv, xv = np.meshgrid(y,x)
+    nonzero.shape = (nonzero.shape[0], nonzero.shape[1])
+    logging.debug("xv size, nonzero-array size: {}, {}".format(xv.shape, nonzero.shape))
+    data_x = xv[nonzero].flatten()
+    data_y = yv[nonzero].flatten()
+    data_pos = np.vstack([data_x, data_y]).T
+    logging.debug("Reconstituted data_pos: x={}, y={}".format(data_pos[:,0], data_pos[:,1]))
+    logging.debug("data_pos size: {}".format( data_pos.shape))
+    return (running_mean, data_pos), (running_weight, data_pos)
+
+def CenterForMatrix(data, data_pos, extent, gridsize):
+    mtx_scale = GetMtxScale(extent, gridsize)
+    data_pos = mtx_scale * ( data_pos - np.array([extent[0], extent[2]]))
+    data_pos = np.abs(np.round(data_pos))
+    data_pos = data_pos.astype(int)
+    index = np.arange(0, len(data_pos))
+    index.shape = (len(data_pos), 1)
+    merge = np.hstack([index,data_pos])
+    merge = np.sort(merge.view('i8,i8,i8'), order=['f1','f2'])
+    data = data[merge.view(np.int)[:,0]] 
+    data_pos = merge.view(np.int)[:,(1,2)]
+    logging.debug("Sorted data_pos: x={}, y={}".format(data_pos[:,0], data_pos[:,1]))
+
+    #sort1 = data_pos[:,1].argsort()
+    #logging.debug("Sort1: {}, {}".format(sort1, sort1.shape))
+    #data     = data[sort1]
+    #data_pos = data_pos[sort1]
+    #logging.debug("Data_pos shape: {}".format(data_pos.shape))
+    #sort2 = data_pos[:,0].argsort()
+    #data     = data[sort2]
+    #data_pos = data_pos[sort2]
+    return (data, data_pos)
+    
+
+
 def UpdateRunningMean2D(running_mean_mtx, running_weight_mtx, x, y, value, extent, gridsize, style='hex'):
     logging.debug("Number of entries: {}".format(x.shape))
     value_shape  = (2*gridsize[0]+1, 2*gridsize[1]+1, value.shape[1])
@@ -214,37 +234,20 @@ def UpdateRunningMean2D(running_mean_mtx, running_weight_mtx, x, y, value, exten
     if style=='hex':
         mean_mtx   = np.zeros(value_shape)
         weight_mtx = np.zeros(weight_shape)
-        mtx_scale = GetMtxScale(extent, gridsize)
         
         logging.debug("Shape of mean_mtx: {}".format(mean_mtx.shape))
         # Compute the mean of all of the values in "value" 
         for k in xrange(value.shape[1]):
             meanplt   = plt.hexbin(x, y, C=value[:,k], mincnt=0, 
-                    gridsize = gridsize, extent=extent) 
-            plt.clf()
+                    gridsize = gridsize, extent=extent); plt.clf()
             mean   = meanplt.get_array()
-            mean_pos   = mtx_scale * (meanplt.get_offsets() 
-                    - np.array([extent[0],extent[2]]))
-            mean_pos = np.abs(np.round(mean_pos))
-            mean_pos = mean_pos.astype(int)
-            logging.debug("Mean pos values: {}".format(mean_pos))
-
-            logging.debug("Shape of mean-value data: {}".format(mean.shape))
-            logging.debug("Extent of mean-value data: {}".format( 
-                    [min(mean_pos[:,0]), max(mean_pos[:,0]), 
-                     min(mean_pos[:,1]), max(mean_pos[:,1])] ))
-
-            mean_mtx  [mean_pos[:,0], mean_pos[:,1],k] = mean[:]
+            mean, mean_pos = CenterForMatrix(mean, meanplt.get_offsets(), extent, gridsize)
+            mean_mtx  [mean_pos[:,0], mean_pos[:,1], k] = mean[:]
         # Compute the statistical weight of those entries
         weightplt = plt.hexbin(x, y, mincnt=0, 
-                gridsize = gridsize, extent=extent) 
-        plt.clf()
+                gridsize = gridsize, extent=extent); plt.clf()
         weight = weightplt.get_array()
-        weight_pos = mtx_scale * (weightplt.get_offsets() 
-                - np.array([extent[0],extent[2]]))
-        weight_pos = np.round(weight_pos)
-        weight_pos = weight_pos.astype(int)
-        logging.debug("Shape of weight data: {}".format(weight.shape))
+        weight, weight_pos = CenterForMatrix(weight, weightplt.get_offsets(), extent, gridsize)
         weight_mtx[weight_pos[:,0], weight_pos[:,1], 0] = weight[:]
 
         running_mean_mtx   += mean_mtx * weight_mtx
@@ -294,7 +297,6 @@ def GridOP(data_tik, display_type=[], dynamic_step = 0, colorrange=[None,None], 
     atom_type = 'water'
     running_mean_mtx = None
     running_weight_mtx = None
-    mtx_scale = GetMtxScale(coord_system.GetExtent(), gridsize)
     for t0 in xrange(data_tik.shape[0] - dynamic_step):
         #print "outputting time {} of {}".format(t0, data_tik.shape[0])
         atoms = [data_tik[t0,:,:]]
@@ -308,7 +310,9 @@ def GridOP(data_tik, display_type=[], dynamic_step = 0, colorrange=[None,None], 
         r,z,op_i = coord_system(r_ik, op_i)
         running_mean_mtx, running_weight_mtx = UpdateRunningMean2D(running_mean_mtx, running_weight_mtx, r, z, op_i, \
                                                                     extent, gridsize)
-    (data, data_pos), (density,density_pos) = coord_system.ProcessSparseRunner(running_mean_mtx, running_weight_mtx, mtx_scale)
+    (data, data_pos), (density,density_pos) = \
+            ProcessSparseRunner(running_mean_mtx, running_weight_mtx, 
+                                coord_system.GetExtent(), gridsize)
 
     # PLOTTING FUNCTION -- should be separate function, but it shares too many arguments
     # Build the plotlabeler
@@ -323,6 +327,8 @@ def GridOP(data_tik, display_type=[], dynamic_step = 0, colorrange=[None,None], 
                             ylabel="Z, vertical height (nm)", \
                             colormap = colormap, \
                             colorrange = colorrange)
+
+
     # Plot OP image
     OPPlotter2D(data_pos[:,0],data_pos[:,1], data, \
                 extent, gridsize, plotlabeler=plotlabeler, subplot=(2,1,1))
