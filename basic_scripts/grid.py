@@ -1,10 +1,5 @@
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
 import ConfigParser
-import matplotlib.pyplot as plt
 import h5py
-import RMSDAnalyze.grid as grid
 import logging
 import numpy as np
 
@@ -20,13 +15,21 @@ import numpy as np
 #    print hex.NearestPeriodic(v1, v2)
 #
 
-
 def main():
     logging.basicConfig(level=logging.DEBUG)
     config = ConfigParser.RawConfigParser()
     config.read('RMSDAnalyze.cfg')
     hdffile = config.get('HDF','file')
     hdfatom = config.get('HDF','atom_dset')
+    display_type = config.get('plotting','display_type')
+    output_dir  = config.get('plotting','output_dir')
+
+    import matplotlib
+    if display_type != 'display':
+        matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    import RMSDAnalyze.grid as grid
+    
     colormap= config.get('plotting','colormap')
     colormap= plt.cm.get_cmap(colormap)
 
@@ -56,16 +59,16 @@ def main():
         rmsd_lambda.SetTitle()
 
         coord_system = grid.SlabCoords(10.0, 4.0)
+        coord_system = grid.RadialCoords(10.0, 4.0)
 
         colorrange = None
-        display_type = 'png'
-        file_name ="/home/jhaberstroh/Dropbox/Physics/subgroup/2014-11-10/TMV-test"
+        file_name = output_dir + "/TMV-test"
 
-        grid.GridOP(ds, dynamic_step=rmsd_dT, op_type='rmsd', 
+        grid.GridOP(ds, dynamic_step=rmsd_dT, op_type='angle', 
                 colorrange=colorrange, display_type = display_type, 
                 file_name=file_name, rmsd_lambda = rmsd_lambda, 
                 colormap=colormap, coord_system = coord_system, 
-                pbc=hex, nframes = 10)
+                pbc=hex, nframes = 5)
 
 
 if __name__ == "__main__":

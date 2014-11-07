@@ -69,6 +69,8 @@ class SlabCoords:
         self.thickness = thickness
     def GetExtent(self):
         return [-self.dir1_extent, self.dir1_extent, -self.dir2_extent, self.dir2_extent]
+    def UndoJacobian(self, value, dir1, dir2, gridsize):
+        return value
     def __call__(self, r_ik, op_i=None):
         # Truncate to relevant regions of the box
         sub = ((np.abs(r_ik[:, self.dir1     ]) < self.dir1_extent) * 
@@ -86,10 +88,12 @@ class RadialCoords:
     def __init__(self, r_extent, z_extent):
         self.r_extent = r_extent
         self.z_extent = z_extent
-    def GetMtxScale(self, gridsize):
-        return max(gridsize[0] / self.r_extent, gridsize[1] / (2 * self.z_extent)) * 100
     def GetExtent(self):
         return [0, self.r_extent, -self.z_extent, self.z_extent]
+    def UndoJacobian(self, value, r, z, gridsize):
+        extra_rad = self.r_extent / float(gridsize[0])
+        logging.debug("value shape, r shape: {}, {}".format(value.shape, r.shape))
+        return value[:,0] / (r + extra_rad)
     def __call__(self, r_ik, op_i=None):
         r_cyl_i = np.sqrt( np.square(r_ik[:,0]) + np.square(r_ik[:,1]))
         z_cyl_i = r_ik[:,2]
@@ -189,8 +193,8 @@ def OPPlotter2D(x,y, value, extent, gridsize, plotlabeler=PlotLabeler, style='he
         print x.shape
         print y.shape
         print value.shape
-        plot_out = plt.hexbin(x, y, C=value, \
-                   cmap=plotlabeler.colormap, \
+        plot_out = plt.hexbin(x, y, C=value, 
+                   cmap=plotlabeler.colormap, 
                    gridsize=gridsize, extent=extent)
     cb = plt.colorbar(plot_out, spacing='uniform',extend='max')
     plt.title (plotlabeler.title)
@@ -208,7 +212,11 @@ def GetMtxScale(extent, gridsize):
 def ProcessSparseRunner(running_mean, running_weight, extent, gridsize):
     mtx_scale = GetMtxScale(extent, gridsize)
     nonzero = (running_weight != 0)
-    running_mean   = running_mean[nonzero] / running_weight[nonzero]
+    logging.debug("PRE  nonzero shape: {}".format(nonzero.shape))
+    nonzero.shape = (nonzero.shape[0], nonzero.shape[1])
+    logging.debug("PRE  running_mean shape: {}".format(running_mean.shape))
+    running_mean   = running_mean[nonzero, :] / running_weight[nonzero]
+    logging.debug("POST running_mean shape: {}".format(running_mean.shape))
     running_weight = running_weight[nonzero]
 
     logging.debug("Matrix scale: {}, shape = {}".format(mtx_scale, mtx_scale.shape))
@@ -225,7 +233,7 @@ def ProcessSparseRunner(running_mean, running_weight, extent, gridsize):
     data_pos = np.vstack([data_x, data_y]).T
     logging.debug("Reconstituted data_pos: x={}, y={}".format(data_pos[:,0], data_pos[:,1]))
     logging.debug("data_pos size: {}".format( data_pos.shape))
-    return (running_mean, data_pos), (running_weight, data_pos)
+    return running_mean, running_weight, data_pos
 
 def CenterForMatrix(data, data_pos, extent, gridsize):
     mtx_scale = GetMtxScale(extent, gridsize)
@@ -244,9 +252,11 @@ def CenterForMatrix(data, data_pos, extent, gridsize):
     return (data, data_pos)
 
 def UpdateRunningMean2D(running_mean_mtx, running_weight_mtx, x, y, value, extent, gridsize, style='hex'):
-    logging.debug("Number of entries: {}".format(x.shape))
+    logging.debug("Number of objects being added: {}".format(len(x)))
+    if len(value.shape) == 1:
+        value.shape = (value.shape[0], 1)
     value_shape  = (2*gridsize[0]+1, 2*gridsize[1]+1, value.shape[1])
-    weight_shape = (value_shape[0], value_shape[1], 1)
+    weight_shape = (2*gridsize[0]+1, 2*gridsize[1]+1, 1)
     if running_mean_mtx == None:
         running_mean_mtx = np.zeros(value_shape)
     if running_weight_mtx == None:
@@ -330,17 +340,31 @@ def GridOP(data_tik, display_type=[], dynamic_step = 0, colorrange=[None,None],
         atoms = [data_tik[t0,:,:]]
         if op_type in dynamic_op:
             atoms.append(data_tik[t0+dynamic_step,:,:])
-        atoms, op_i = OPCompute(atoms, atom_type, op_type, water_pos, ion_pos, rmsd_lambda, pbc)
+        atoms, op_i = OPCompute(atoms, atom_type, op_type, 
+                water_pos, ion_pos, rmsd_lambda, pbc)
         # Convert to cylindrical coords and center
         center_k = np.mean(data_tik[t0,:,:], axis=0)
         r_ik = atoms[0] - center_k
         extent = coord_system.GetExtent()
         r,z,op_i = coord_system(r_ik, op_i)
-        running_mean_mtx, running_weight_mtx = UpdateRunningMean2D(running_mean_mtx, running_weight_mtx, r, z, op_i, \
-                                                                    extent, gridsize)
-    (data, data_pos), (density,density_pos) = \
-            ProcessSparseRunner(running_mean_mtx, running_weight_mtx, 
-                                coord_system.GetExtent(), gridsize)
+        running_mean_mtx, running_weight_mtx = UpdateRunningMean2D(
+                running_mean_mtx, running_weight_mtx, 
+                r, z, op_i, extent, gridsize)
+
+    data, weight, pos = ProcessSparseRunner(
+            running_mean_mtx, running_weight_mtx, 
+            coord_system.GetExtent(), gridsize)
+    data_pos = pos
+
+    logging.debug("Old density size: {}".format(weight.shape))
+    density = coord_system.UndoJacobian(weight, pos[:, 0], pos[:, 1], gridsize)
+    logging.debug("New density size: {}".format(density.shape))
+    density_pos = pos
+    
+    if op_type == 'rmsd':
+        logging.debug("Data shape: {}".format(data.shape))
+        mean_r = np.mean(data[:,[1,2,3]], axis=1)
+        data = np.sqrt(data[:,0] - np.square(mean_r))
 
     # PLOTTING FUNCTION -- should be separate function, but it shares too many arguments
     # Build the plotlabeler
@@ -350,16 +374,16 @@ def GridOP(data_tik, display_type=[], dynamic_step = 0, colorrange=[None,None],
         title='q6 plot'
     else:
         title='Some generic order parameter plot'
-    plotlabeler=PlotLabeler(title=title, \
-                            xlabel="R, cylindrical radius from center of disc (nm)", \
-                            ylabel="Z, vertical height (nm)", \
-                            colormap = colormap, \
-                            colorrange = colorrange)
+    plotlabeler=PlotLabeler(title=title, 
+            xlabel="R, cylindrical radius from center of disc (nm)", 
+            ylabel="Z, vertical height (nm)", 
+            colormap = colormap, 
+            colorrange = colorrange)
 
 
     # Plot OP image
-    OPPlotter2D(data_pos[:,0],data_pos[:,1], data, \
-                extent, gridsize, plotlabeler=plotlabeler, subplot=(2,1,1))
+    OPPlotter2D(data_pos[:,0],data_pos[:,1], data, 
+            extent, gridsize, plotlabeler=plotlabeler, subplot=(2,1,1))
     # Plot the protein structure
 
     center_k = np.mean(data_tik[:,0:water_pos,:], axis=(0,1))
@@ -367,9 +391,10 @@ def GridOP(data_tik, display_type=[], dynamic_step = 0, colorrange=[None,None],
     protein_r, protein_z = coord_system(protein_ik)
     # Plot density image
     plotlabeler.title = "Density, no units"
+    logging.debug("density: {}".format(density))
     plotlabeler.colorrange = None
-    OPPlotter2D(density_pos[:,0],density_pos[:,1], density, \
-                extent, gridsize, plotlabeler=plotlabeler, subplot=(2,1,2))
+    OPPlotter2D(density_pos[:,0],density_pos[:,1], density, 
+            extent, gridsize, plotlabeler=plotlabeler, subplot=(2,1,2))
     if 'png' in display_type:
         if file_name:
             plt.savefig(file_name + '.png')

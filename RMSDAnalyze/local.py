@@ -5,23 +5,10 @@ class LocalSlabCoords:
     def __init__(self, r_0, r_f, z_0, z_f, thickness=1):
         self.extent = [r_0, r_f, z_0, z_f]
         self.thickness = thickness
-    def GetMtxScale(self, gridsize):
-        return max(gridsize[0] / self.r_extent, gridsize[1] / (2 * self.z_extent)) * 100
-    def ProcessSparseRunner(self, running_mean, running_weight, mtx_scale):
-        extent = self.GetExtent()
-        running_mean   = mtx.csr_matrix(running_mean/running_weight)
-        running_mean   = running_mean.tocoo()
-        running_weight = running_weight.tocoo()
-        #print "RUNNING MEAN TYPE: {}".format(type(running_mean_mtx))
-        #print "RUNNING MEAN DATA: {}".format(running_mean_mtx)
-        data_pos  = np.vstack((running_mean.row,running_mean.col)).astype(float).T / mtx_scale
-        data_pos += np.array([extent[0],extent[2]])
-        weight_pos = np.vstack((running_weight.row,running_weight.col)).astype(float).T / mtx_scale
-        weight_pos += np.array([extent[0],extent[2]])
-        weight_mean = running_weight.data
-        return (running_mean.data, data_pos), (weight_mean, weight_pos)
     def GetExtent(self):
         return self.extent
+    def UndoJacobian(self, value, dir1, dir2, gridsize):
+        return value
     def __call__(self, r_ik, op_i=None):
         # Truncate to relevant regions of the box
         sub = ((r_ik[:, 0] > self.extent[0]) * 
