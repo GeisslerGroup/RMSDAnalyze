@@ -103,20 +103,54 @@ class RadialCoords:
         else:
             return r, z
 
+# 22.34405  18.91217   9.91809   0.00000   0.00000 -10.91895   0.00000  -0.00000  -0.00000
+class HexPBC:
+    """ 
+    Minimum image convention periodic boundary conditions for generic 
+            triclinic systems. Constructor takes the box vectors that come
+            from gromacs simulations and is output from the .gro file format.
 
-def ComputeRMSD(r0_ik, r1_ik, pre_cutoff=None, post_cutoff=None, rmsd_lambda = None):
+    FROM: M. E. Tuckerman. Statistical Mechanics: Theory and Molecular 
+            Simulation.  Oxford University Press, Oxford, UK, 2010
+
+    h := [a1, a2, a3], where ai is each box vector.
+    s_i = h^{-1} r_i  
+    s_ij = s_i - s_j
+    s_ij <-- s_ij - NINT(s_ij)        (general minimum image convention)
+    r_ij = h s_ij
+    """
+
+    def __init__(self, gromacs_fmt):
+        a1 = [ gromacs_fmt[0], gromacs_fmt[3], gromacs_fmt[4] ]
+        a2 = [ gromacs_fmt[5], gromacs_fmt[1], gromacs_fmt[6] ]
+        a3 = [ gromacs_fmt[7], gromacs_fmt[8], gromacs_fmt[2] ]
+        self.h = np.vstack([a1, a2, a3])
+        self.hinv = LA.inv(self.h)
+    def NearestPeriodic(self, r1_ik, r2_ik):
+        s1_ki = np.dot(self.hinv, r1_ik.T)
+        s2_ki = np.dot(self.hinv, r2_ik.T)
+        ds_ki = s1_ki - s2_ki
+        ds_ki -= np.rint(ds_ki)
+        dr_ik = np.dot(self.h, ds_ki).T
+        return dr_ik
+    def __str__(self):
+        return "Rows are box vectors: \n{}".format(self.h)
+
+
+def ComputeRMSD(r0_ik, r1_ik, pre_cutoff=None, post_cutoff=None, rmsd_lambda = None, pbc=None):
     """
     Compute the quantities that, when averaged, allow for a computation of RMSD.
     Returns OP_i = [|r|^2, dx, dy, dz]
     """
-    dr_ik = r0_ik- r1_ik 
+    if pbc:
+        # Compute r1 - r0
+        logging.debug("USING PERIODIC BOUNDARY CONDITIONS")
+        dr_ik = pbc.NearestPeriodic(r1_ik, r0_ik)
+    else:
+        dr_ik = r0_ik- r1_ik 
     magsq_dr_i = np.sum(np.square(dr_ik), axis=1)
-    #if pre_cutoff:
-    #    rmsd_i[rmsd_i > pre_cutoff] = None
-    #if rmsd_lambda:
-    #    rmsd_i = rmsd_lambda(rmsd_i)
-    #if post_cutoff:
-    #    rmsd_i[rmsd_i > post_cutoff] = None
+    H = np.histogram(magsq_dr_i, bins=100)
+    logging.debug("Histogram of velocities: {}".format(H))
     magsq_dr_i.shape = (len(magsq_dr_i), 1)
     op_i = np.hstack([magsq_dr_i, dr_ik])
     return op_i
@@ -243,7 +277,7 @@ def UpdateRunningMean2D(running_mean_mtx, running_weight_mtx, x, y, value, exten
         raise ValueError("Plotting style must be 'hex', received {}". format(style))
 
 
-def OPCompute(atoms, atom_type, op_type, water_pos, ion_pos, rmsd_lambda):
+def OPCompute(atoms, atom_type, op_type, water_pos, ion_pos, rmsd_lambda, pbc=None):
     # PRE-FILTER
     if atom_type == 'water':
         for i in xrange(len(atoms)):
@@ -259,7 +293,7 @@ def OPCompute(atoms, atom_type, op_type, water_pos, ion_pos, rmsd_lambda):
     elif op_type == 'density':
         op_i = np.ones(atoms[0].shape)
     elif op_type == 'rmsd':
-        op_i = ComputeRMSD(atoms[0], atoms[1], post_cutoff=5.0, rmsd_lambda = rmsd_lambda)
+        op_i = ComputeRMSD(atoms[0], atoms[1], post_cutoff=5.0, rmsd_lambda = rmsd_lambda, pbc=pbc)
     elif op_type == 'angle':
         op_i = ComputeRMSAngle(atoms[0], atoms[1], rmsd_lambda = rmsd_lambda)
     else:
@@ -271,23 +305,32 @@ def OPCompute(atoms, atom_type, op_type, water_pos, ion_pos, rmsd_lambda):
     return atoms, op_i
 
 
-def GridOP(data_tik, display_type=[], dynamic_step = 0, colorrange=[None,None], op_type='density', \
-                   file_name=None, rmsd_lambda=None, colormap=plt.cm.Spectral_r, \
-                   water_pos=83674, ion_pos = 423427, coord_system = SlabCoords(10.0, 4.0), gridsize=[40,30]):
+def GridOP(data_tik, display_type=[], dynamic_step = 0, colorrange=[None,None],
+        op_type='density', file_name=None, rmsd_lambda=None, 
+        colormap=plt.cm.Spectral_r, water_pos=83674, ion_pos = 423427, 
+        coord_system = SlabCoords(10.0, 4.0), gridsize=[40,30],
+        pbc = None, nframes = None):
     if dynamic_step > 0 and op_type in static_op:
-        raise ValueError("Cannot use a dynamic step {} > 0 with an op_type {}".format(dynamic_step, op_type))
+        raise ValueError("Cannot use a dynamic step {} > 0 with an op_type {}"
+                         .format(dynamic_step, op_type))
     if dynamic_step == 0 and op_type in dynamic_op:
-        raise ValueError("Cannot use a dynamic step == 0 with an op_type {}".format(dynamic_step, op_type))
+        raise ValueError("Cannot use a dynamic step == 0 with an op_type {}"
+                         .format(dynamic_step, op_type))
+
+    if not nframes:
+        nframes = data_tik.shape[0] - dynamic_step
+    else:
+        nframes = min(data_tik.shape[0] - dynamic_step, nframes)
 
     atom_type = 'water'
     running_mean_mtx = None
     running_weight_mtx = None
-    for t0 in xrange(data_tik.shape[0] - dynamic_step):
+    for t0 in xrange(nframes):
         #print "outputting time {} of {}".format(t0, data_tik.shape[0])
         atoms = [data_tik[t0,:,:]]
         if op_type in dynamic_op:
             atoms.append(data_tik[t0+dynamic_step,:,:])
-        atoms, op_i = OPCompute(atoms, atom_type, op_type, water_pos, ion_pos, rmsd_lambda)
+        atoms, op_i = OPCompute(atoms, atom_type, op_type, water_pos, ion_pos, rmsd_lambda, pbc)
         # Convert to cylindrical coords and center
         center_k = np.mean(data_tik[t0,:,:], axis=0)
         r_ik = atoms[0] - center_k
