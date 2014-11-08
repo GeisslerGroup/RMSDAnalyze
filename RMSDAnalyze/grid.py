@@ -151,10 +151,10 @@ def ComputeRMSD(r0_ik, r1_ik, pre_cutoff=None, post_cutoff=None, rmsd_lambda = N
         logging.debug("USING PERIODIC BOUNDARY CONDITIONS")
         dr_ik = pbc.NearestPeriodic(r1_ik, r0_ik)
     else:
-        dr_ik = r0_ik- r1_ik 
+        dr_ik = r1_ik- r0_ik 
     magsq_dr_i = np.sum(np.square(dr_ik), axis=1)
-    H = np.histogram(magsq_dr_i, bins=100)
-    logging.debug("Histogram of velocities: {}".format(H))
+    # H = np.histogram(magsq_dr_i, bins=100)
+    # logging.debug("Histogram of velocities: {}".format(H))
     magsq_dr_i.shape = (len(magsq_dr_i), 1)
     op_i = np.hstack([magsq_dr_i, dr_ik])
     return op_i
@@ -379,13 +379,10 @@ def GridOP(data_tik, display_type=[], dynamic_step = 0, colorrange=[None,None],
             ylabel="Z, vertical height (nm)", 
             colormap = colormap, 
             colorrange = colorrange)
-
-
     # Plot OP image
     OPPlotter2D(data_pos[:,0],data_pos[:,1], data, 
             extent, gridsize, plotlabeler=plotlabeler, subplot=(2,1,1))
     # Plot the protein structure
-
     center_k = np.mean(data_tik[:,0:water_pos,:], axis=(0,1))
     protein_ik = data_tik[0,0:water_pos,:] - center_k[0]
     protein_r, protein_z = coord_system(protein_ik)
