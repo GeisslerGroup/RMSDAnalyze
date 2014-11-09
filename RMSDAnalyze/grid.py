@@ -4,44 +4,9 @@ import matplotlib.colors as clr
 import scipy.sparse as mtx
 import numpy.linalg as LA
 import logging
+import coords
+import op
 from sklearn.neighbors import NearestNeighbors
-
-dynamic_op=['rmsd','angle']
-static_op=['q6','density']
-
-class RMSDLambda:
-    def __init__(self, b_scaletime, b_activity, rmsd_delay=0, cutoff=0, sharpness=0,title=None):
-        self.b_scaletime = b_scaletime
-        self.b_activity = b_activity
-        self.rmsd_delay = rmsd_delay
-        self.sharpness = sharpness
-        self.cutoff = cutoff
-        self.title=title
-    def __call__ (self, rmsd):
-        if self.b_scaletime:
-            rmsd /= np.sqrt(self.rmsd_delay)
-        if self.b_activity:
-            return np.reciprocal(1 + np.exp( -self.sharpness * (rmsd - self.cutoff)))
-        else:
-            return rmsd
-    def SetTitle(self, rmsd_type='rmsd'):
-        print("rmsd_type={}, activity={}, scaletime={}".format(rmsd_type, self.b_activity, self.b_scaletime))
-        if rmsd_type == 'angle':
-            if self.b_activity:
-                print "SETTING TITLE GOOD"
-                self.title='Mean angular activity, cutoff={}rad, k={}rad^-1, t_delay={}ps'.format(self.cutoff, self.sharpness, self.rmsd_delay)
-            else:
-                print "SETTING TITLE BAD"
-                self.title='Mean angular displacement, t_delay={}ps'.format(self.rmsd_delay)
-        elif rmsd_type == 'rmsd':
-            if self.b_activity and self.b_scaletime:
-                self.title='Mean activity (scaled), cutoff={}nm/ps^(.5), k={}ps^(.5)/nm, t_delay={}ps'.format(self.cutoff, self.sharpness, self.rmsd_delay)
-            elif self.b_activity:
-                self.title='Mean activity, cutoff={}nm, k={}nm^-1, t_delay={}ps'.format(self.cutoff, self.sharpness, self.rmsd_delay)
-            elif self.b_scaletime:
-                self.title='Scaled RMSD (root diffusion), t_delay={}ps'.format(self.rmsd_delay)
-            else:
-                self.title='Mean RMSD, t_delay={}ps'.format(self.rmsd_delay)
 
 class PlotLabeler:
     def __init__(self, title=None, xlabel=None, ylabel=None, colorrange=None, colormap=plt.cm.Spectral_r):
@@ -50,135 +15,6 @@ class PlotLabeler:
         self.ylabel= ylabel
         self.colorrange=colorrange
         self.colormap=colormap
-
-class SlabCoords:
-    def __init__(self, dir1_extent, dir2_extent, dir1=0, dir2=2, thickness=1):
-        """
-        Select a region for all: abs(r[dir1]) < dir1_extent
-                                 abs(r[dir2]) < dir2_extent
-        Collapse the remaining direction for all atoms in a slab of dimension [thickness].
-        """
-        if (dir1 == dir2):
-            raise ValueError("In SlabCoords: dir1 ({}) cannot be equal to dir2 ({}).".format(dir1, dir2))
-        self.dir1     = dir1
-        self.dir2     = dir2
-        self.dir1_extent = dir1_extent
-        self.dir2_extent = dir2_extent
-        # dir_trunc computes the remaining direction
-        self.dir_trunc= sum([0,1,2]) - dir1 - dir2 
-        self.thickness = thickness
-    def GetExtent(self):
-        return [-self.dir1_extent, self.dir1_extent, -self.dir2_extent, self.dir2_extent]
-    def UndoJacobian(self, value, dir1, dir2, gridsize):
-        return value
-    def __call__(self, r_ik, op_i=None):
-        # Truncate to relevant regions of the box
-        sub = ((np.abs(r_ik[:, self.dir1     ]) < self.dir1_extent) * 
-               (np.abs(r_ik[:, self.dir2     ]) < self.dir2_extent) *
-               (np.abs(r_ik[:, self.dir_trunc]) < self.thickness/2.0))
-        r    = r_ik[sub,self.dir1]
-        z    = r_ik[sub,self.dir2]
-        if op_i != None:
-            op_i = op_i[sub]
-            return r, z, op_i
-        else:
-            return r, z
-
-class RadialCoords:
-    def __init__(self, r_extent, z_extent):
-        self.r_extent = r_extent
-        self.z_extent = z_extent
-    def GetExtent(self):
-        return [0, self.r_extent, -self.z_extent, self.z_extent]
-    def UndoJacobian(self, value, r, z, gridsize):
-        extra_rad = self.r_extent / float(gridsize[0])
-        logging.debug("value shape, r shape: {}, {}".format(value.shape, r.shape))
-        return value[:,0] / (r + extra_rad)
-    def __call__(self, r_ik, op_i=None):
-        r_cyl_i = np.sqrt( np.square(r_ik[:,0]) + np.square(r_ik[:,1]))
-        z_cyl_i = r_ik[:,2]
-        # Truncate to relevant regions of the box
-        sub = (r_cyl_i < self.r_extent) * (np.abs(z_cyl_i) < self.z_extent)
-        r    = r_cyl_i[sub]
-        z    = z_cyl_i[sub]
-        if op_i != None:
-            op_i = op_i[sub]
-            return r, z, op_i
-        else:
-            return r, z
-
-# 22.34405  18.91217   9.91809   0.00000   0.00000 -10.91895   0.00000  -0.00000  -0.00000
-class HexPBC:
-    """ 
-    Minimum image convention periodic boundary conditions for generic 
-            triclinic systems. Constructor takes the box vectors that come
-            from gromacs simulations and is output from the .gro file format.
-
-    FROM: M. E. Tuckerman. Statistical Mechanics: Theory and Molecular 
-            Simulation.  Oxford University Press, Oxford, UK, 2010
-
-    h := [a1, a2, a3], where ai is each box vector.
-    s_i = h^{-1} r_i  
-    s_ij = s_i - s_j
-    s_ij <-- s_ij - NINT(s_ij)        (general minimum image convention)
-    r_ij = h s_ij
-    """
-
-    def __init__(self, gromacs_fmt):
-        a1 = [ gromacs_fmt[0], gromacs_fmt[3], gromacs_fmt[4] ]
-        a2 = [ gromacs_fmt[5], gromacs_fmt[1], gromacs_fmt[6] ]
-        a3 = [ gromacs_fmt[7], gromacs_fmt[8], gromacs_fmt[2] ]
-        self.h = np.vstack([a1, a2, a3])
-        self.hinv = LA.inv(self.h)
-    def NearestPeriodic(self, r1_ik, r2_ik):
-        s1_ki = np.dot(self.hinv, r1_ik.T)
-        s2_ki = np.dot(self.hinv, r2_ik.T)
-        ds_ki = s1_ki - s2_ki
-        ds_ki -= np.rint(ds_ki)
-        dr_ik = np.dot(self.h, ds_ki).T
-        return dr_ik
-    def __str__(self):
-        return "Rows are box vectors: \n{}".format(self.h)
-
-
-def ComputeRMSD(r0_ik, r1_ik, pre_cutoff=None, post_cutoff=None, rmsd_lambda = None, pbc=None):
-    """
-    Compute the quantities that, when averaged, allow for a computation of RMSD.
-    Returns OP_i = [|r|^2, dx, dy, dz]
-    """
-    if pbc:
-        # Compute r1 - r0
-        logging.debug("USING PERIODIC BOUNDARY CONDITIONS")
-        dr_ik = pbc.NearestPeriodic(r1_ik, r0_ik)
-    else:
-        dr_ik = r1_ik- r0_ik 
-    magsq_dr_i = np.sum(np.square(dr_ik), axis=1)
-    # H = np.histogram(magsq_dr_i, bins=100)
-    # logging.debug("Histogram of velocities: {}".format(H))
-    magsq_dr_i.shape = (len(magsq_dr_i), 1)
-    op_i = np.hstack([magsq_dr_i, dr_ik])
-    return op_i
-
-
-
-def ComputeRMSAngle(r0_ik, r1_ik, rmsd_lambda = None):
-    r0_v = (r0_ik[0::3] - r0_ik[1::3]) + \
-           (r0_ik[0::3] - r0_ik[2::3])
-    r1_v = (r1_ik[0::3] - r1_ik[1::3]) + \
-           (r1_ik[0::3] - r1_ik[2::3])
-    r0_norm = LA.norm(r0_v, axis=1)
-    r0_norm.shape = (r0_norm.shape[0],1)
-    r0_v /= r0_norm
-    r1_norm = LA.norm(r1_v, axis=1)
-    r1_norm.shape = (r1_norm.shape[0],1)
-    r1_v /= r1_norm
-    theta = np.arccos(np.sum(r0_v*r1_v,axis=1))
-    return rmsd_lambda(theta)
-
-def ComputeQ6(r_ik, cutoff_A):
-    raise NotImplementedError("q6 order parameter not implemented")
-    nbrs = NearestNeighbors(n_neighbors=4, algorithm='ball_tree').fit(r_ik)
-    return np.ones(atoms_i.shape)
 
 def OPPlotter2D(x,y, value, extent, gridsize, plotlabeler=PlotLabeler, style='hex', subplot=(1,1,1)):
     plt.subplot( subplot[0], subplot[1], subplot[2] )
@@ -286,44 +122,16 @@ def UpdateRunningMean2D(running_mean_mtx, running_weight_mtx, x, y, value, exten
     else:
         raise ValueError("Plotting style must be 'hex', received {}". format(style))
 
-
-def OPCompute(atoms, atom_type, op_type, water_pos, ion_pos, rmsd_lambda, pbc=None):
-    # PRE-FILTER
-    if atom_type == 'water':
-        for i in xrange(len(atoms)):
-            atoms[i] = atoms[i][water_pos:ion_pos:,:]
-    else:
-        raise ValueError("GridOPRadial passed atom_type that is not known: {}".format(atom_type))
-    if op_type != 'angle' and atom_type =='water':
-        for i in xrange(len(atoms)):
-            atoms[i] = atoms[i][::3]
-    # Run the appropriate computation on those atoms
-    if   op_type == 'q6':
-        op_i = ComputeQ6(atoms[0], cutoff_A=4.0)
-    elif op_type == 'density':
-        op_i = np.ones(atoms[0].shape)
-    elif op_type == 'rmsd':
-        op_i = ComputeRMSD(atoms[0], atoms[1], post_cutoff=5.0, rmsd_lambda = rmsd_lambda, pbc=pbc)
-    elif op_type == 'angle':
-        op_i = ComputeRMSAngle(atoms[0], atoms[1], rmsd_lambda = rmsd_lambda)
-    else:
-        raise ValueError("GridOPRadial passed op_type that is not known: {}".format(op_type))
-    # POST-FILTER
-    if op_type == 'angle' and atom_type == 'water':
-        atoms[0] = atoms[0][::3]
-    # Convert to cylindrical coords and center
-    return atoms, op_i
-
-
 def GridOP(data_tik, display_type=[], dynamic_step = 0, colorrange=[None,None],
         op_type='density', file_name=None, rmsd_lambda=None, 
         colormap=plt.cm.Spectral_r, water_pos=83674, ion_pos = 423427, 
-        coord_system = SlabCoords(10.0, 4.0), gridsize=[40,30],
-        pbc = None, nframes = None):
-    if dynamic_step > 0 and op_type in static_op:
+        coord_system = coords.SlabCoords(10.0, 4.0), gridsize=[40,30],
+        pbc = None, nframes = None, plot = True):
+
+    if dynamic_step > 0 and op_type in op.static_op:
         raise ValueError("Cannot use a dynamic step {} > 0 with an op_type {}"
                          .format(dynamic_step, op_type))
-    if dynamic_step == 0 and op_type in dynamic_op:
+    if dynamic_step == 0 and op_type in op.dynamic_op:
         raise ValueError("Cannot use a dynamic step == 0 with an op_type {}"
                          .format(dynamic_step, op_type))
 
@@ -338,9 +146,9 @@ def GridOP(data_tik, display_type=[], dynamic_step = 0, colorrange=[None,None],
     for t0 in xrange(nframes):
         #print "outputting time {} of {}".format(t0, data_tik.shape[0])
         atoms = [data_tik[t0,:,:]]
-        if op_type in dynamic_op:
+        if op_type in op.dynamic_op:
             atoms.append(data_tik[t0+dynamic_step,:,:])
-        atoms, op_i = OPCompute(atoms, atom_type, op_type, 
+        atoms, op_i = op.OPCompute(atoms, atom_type, op_type, 
                 water_pos, ion_pos, rmsd_lambda, pbc)
         # Convert to cylindrical coords and center
         center_k = np.mean(data_tik[t0,:,:], axis=0)
@@ -366,36 +174,38 @@ def GridOP(data_tik, display_type=[], dynamic_step = 0, colorrange=[None,None],
         mean_r = np.mean(data[:,[1,2,3]], axis=1)
         data = np.sqrt(data[:,0] - np.square(mean_r))
 
-    # PLOTTING FUNCTION -- should be separate function, but it shares too many arguments
-    # Build the plotlabeler
-    if rmsd_lambda:
-        title=rmsd_lambda.title
-    elif op_type=='q6':
-        title='q6 plot'
-    else:
-        title='Some generic order parameter plot'
-    plotlabeler=PlotLabeler(title=title, 
-            xlabel="R, cylindrical radius from center of disc (nm)", 
-            ylabel="Z, vertical height (nm)", 
-            colormap = colormap, 
-            colorrange = colorrange)
-    # Plot OP image
-    OPPlotter2D(data_pos[:,0],data_pos[:,1], data, 
-            extent, gridsize, plotlabeler=plotlabeler, subplot=(2,1,1))
-    # Plot the protein structure
-    center_k = np.mean(data_tik[:,0:water_pos,:], axis=(0,1))
-    protein_ik = data_tik[0,0:water_pos,:] - center_k[0]
-    protein_r, protein_z = coord_system(protein_ik)
-    # Plot density image
-    plotlabeler.title = "Density, no units"
-    logging.debug("density: {}".format(density))
-    plotlabeler.colorrange = None
-    OPPlotter2D(density_pos[:,0],density_pos[:,1], density, 
-            extent, gridsize, plotlabeler=plotlabeler, subplot=(2,1,2))
-    if 'png' in display_type:
-        if file_name:
-            plt.savefig(file_name + '.png')
+    if plot:
+        # PLOTTING FUNCTION -- should be separate function, but it shares too many arguments
+        # Build the plotlabeler
+        if rmsd_lambda:
+            title=rmsd_lambda.title
+        elif op_type=='q6':
+            title='q6 plot'
         else:
-            plt.savefig('default.png')
-    if 'display' in display_type:
-        plt.show()
+            title='Some generic order parameter plot'
+        plotlabeler=PlotLabeler(title=title, 
+                xlabel="R, cylindrical radius from center of disc (nm)", 
+                ylabel="Z, vertical height (nm)", 
+                colormap = colormap, 
+                colorrange = colorrange)
+        # Plot OP image
+        OPPlotter2D(data_pos[:,0],data_pos[:,1], data, 
+                extent, gridsize, plotlabeler=plotlabeler, subplot=(2,1,1))
+        # Plot the protein structure
+        center_k = np.mean(data_tik[:,0:water_pos,:], axis=(0,1))
+        protein_ik = data_tik[0,0:water_pos,:] - center_k[0]
+        protein_r, protein_z = coord_system(protein_ik)
+        # Plot density image
+        plotlabeler.title = "Density, no units"
+        logging.debug("density: {}".format(density))
+        plotlabeler.colorrange = None
+        OPPlotter2D(density_pos[:,0],density_pos[:,1], density, 
+                extent, gridsize, plotlabeler=plotlabeler, subplot=(2,1,2))
+        if 'png' in display_type:
+            if file_name:
+                plt.savefig(file_name + '.png')
+            else:
+                plt.savefig('default.png')
+        if 'display' in display_type:
+            plt.show()
+    return data, density, pos
