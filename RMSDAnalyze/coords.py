@@ -1,4 +1,5 @@
 import numpy as np
+import logging
 
 class SlabCoords:
     def __init__(self, dir1_extent, dir2_extent, dir1=0, dir2=2, thickness=1):

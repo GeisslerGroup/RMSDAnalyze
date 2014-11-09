@@ -29,6 +29,8 @@ def main():
         matplotlib.use('Agg')
     import matplotlib.pyplot as plt
     import RMSDAnalyze.grid as grid
+    import RMSDAnalyze.coords as coords
+    import RMSDAnalyze.op as op
     
     colormap= config.get('plotting','colormap')
     colormap= plt.cm.get_cmap(colormap)
@@ -46,25 +48,25 @@ def main():
         #                               rmsd_delay = rmsd_dT * .1,         
         #                               cutoff = .38,  
         #                               sharpness = 12)
-        rmsd_lambda = grid.RMSDLambda( b_activity = False,                 
+        rmsd_lambda = op.RMSDLambda( b_activity = False,                 
                                        b_scaletime = False, 
                                        rmsd_delay = rmsd_dT * .1,         
                                        cutoff = .38,  
                                        sharpness = 12)
 
-        hex = grid.HexPBC([ 22.34405, 18.91217,   9.91809 ,
+        hex = op.HexPBC([ 22.34405, 18.91217,   9.91809 ,
                              0.00000,  0.00000, -10.91895 ,
                              0.00000, -0.00000,  -0.00000 ])
 
         rmsd_lambda.SetTitle()
 
-        coord_system = grid.SlabCoords(10.0, 4.0)
-        coord_system = grid.RadialCoords(10.0, 4.0)
+        coord_system = coords.SlabCoords(10.0, 4.0)
+        coord_system = coords.RadialCoords(10.0, 4.0)
 
         colorrange = None
         file_name = output_dir + "/TMV-test"
 
-        grid.GridOP(ds, dynamic_step=rmsd_dT, op_type='angle', 
+        grid.GridOP(ds, dynamic_step=rmsd_dT, op_type='rmsd', 
                 colorrange=colorrange, display_type = display_type, 
                 file_name=file_name, rmsd_lambda = rmsd_lambda, 
                 colormap=colormap, coord_system = coord_system, 

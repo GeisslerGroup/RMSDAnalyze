@@ -1,5 +1,6 @@
 import numpy.linalg as LA
 import numpy as np
+import logging
 
 dynamic_op=['rmsd','angle']
 static_op=['q6','density']

@@ -151,8 +151,6 @@ def GridOP(data_tik, display_type=[], dynamic_step = 0, colorrange=[None,None],
         atoms, op_i = op.OPCompute(atoms, atom_type, op_type, 
                 water_pos, ion_pos, rmsd_lambda, pbc)
         # Convert to cylindrical coords and center
-        #center_k = np.mean(data_tik[t0,:,:], axis=0)
-        #r_ik = atoms[0] - center_k
         r_ik = atoms[0]
         extent = coord_system.GetExtent()
         r,z,op_i = coord_system(r_ik, op_i)
