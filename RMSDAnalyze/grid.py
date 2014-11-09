@@ -93,9 +93,9 @@ def UpdateRunningMean2D(running_mean_mtx, running_weight_mtx, x, y, value, exten
         value.shape = (value.shape[0], 1)
     value_shape  = (2*gridsize[0]+1, 2*gridsize[1]+1, value.shape[1])
     weight_shape = (2*gridsize[0]+1, 2*gridsize[1]+1, 1)
-    if running_mean_mtx == None:
+    if running_mean_mtx is None:
         running_mean_mtx = np.zeros(value_shape)
-    if running_weight_mtx == None:
+    if running_weight_mtx is None:
         running_weight_mtx = np.zeros(weight_shape)
     if style=='hex':
         mean_mtx   = np.zeros(value_shape)
@@ -151,13 +151,15 @@ def GridOP(data_tik, display_type=[], dynamic_step = 0, colorrange=[None,None],
         atoms, op_i = op.OPCompute(atoms, atom_type, op_type, 
                 water_pos, ion_pos, rmsd_lambda, pbc)
         # Convert to cylindrical coords and center
-        center_k = np.mean(data_tik[t0,:,:], axis=0)
-        r_ik = atoms[0] - center_k
+        #center_k = np.mean(data_tik[t0,:,:], axis=0)
+        #r_ik = atoms[0] - center_k
+        r_ik = atoms[0]
         extent = coord_system.GetExtent()
         r,z,op_i = coord_system(r_ik, op_i)
         running_mean_mtx, running_weight_mtx = UpdateRunningMean2D(
                 running_mean_mtx, running_weight_mtx, 
                 r, z, op_i, extent, gridsize)
+        print running_mean_mtx[running_mean_mtx != 0]
 
     data, weight, pos = ProcessSparseRunner(
             running_mean_mtx, running_weight_mtx, 
@@ -171,8 +173,9 @@ def GridOP(data_tik, display_type=[], dynamic_step = 0, colorrange=[None,None],
     
     if op_type == 'rmsd':
         logging.debug("Data shape: {}".format(data.shape))
-        mean_r = np.mean(data[:,[1,2,3]], axis=1)
-        data = np.sqrt(data[:,0] - np.square(mean_r))
+        mean_r = data[:,[1,2,3]]
+
+        data = np.sqrt(data[:,0] - np.sum(np.square(mean_r), axis=1))
 
     if plot:
         # PLOTTING FUNCTION -- should be separate function, but it shares too many arguments

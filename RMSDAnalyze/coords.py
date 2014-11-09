@@ -27,7 +27,7 @@ class SlabCoords:
                (np.abs(r_ik[:, self.dir_trunc]) < self.thickness/2.0))
         r    = r_ik[sub,self.dir1]
         z    = r_ik[sub,self.dir2]
-        if op_i != None:
+        if not op_i is None:
             op_i = op_i[sub]
             return r, z, op_i
         else:

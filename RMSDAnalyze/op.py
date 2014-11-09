@@ -82,7 +82,7 @@ def ComputeRMSD(r0_ik, r1_ik, pre_cutoff=None, post_cutoff=None, rmsd_lambda = N
         dr_ik = pbc.NearestPeriodic(r1_ik, r0_ik)
     else:
         dr_ik = r1_ik- r0_ik 
-    magsq_dr_i = np.sqrt(np.sum(np.square(dr_ik), axis=1))
+    magsq_dr_i = np.sum(np.square(dr_ik), axis=1)
     # H = np.histogram(magsq_dr_i, bins=100)
     # logging.debug("Histogram of velocities: {}".format(H))
     magsq_dr_i.shape = (len(magsq_dr_i), 1)

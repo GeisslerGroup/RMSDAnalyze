@@ -2,10 +2,11 @@ import grid
 import logging
 import numpy as np
 import op
+import coords
 
-def LocalOP(data_tik, dynamic_step = 0, op_type='density', \
+def LocalOP(data_tik, dynamic_step = 0, op_type='density', 
                    rmsd_lambda=None, water_pos=83674, ion_pos = 423427, 
-                   coord_system = [grid.RadialCoords(10.0, 4.0)], 
+                   coord_system = [coords.LocalSlabCoords(0.0, 1.0, 0.0, 1.0)], 
                    bins=np.linspace(0,1,100), pbc=None, nframes = None):
     atom_type = 'water'
     if not nframes:
@@ -13,10 +14,10 @@ def LocalOP(data_tik, dynamic_step = 0, op_type='density', \
     else:
         nframes = min(data_tik.shape[0] - dynamic_step, nframes)
 
-    if dynamic_step > 0 and op_type in grid.static_op:
+    if dynamic_step > 0 and op_type in op.static_op:
         raise ValueError("Cannot use a dynamic step {} > 0 with an op_type {}".
                 format(dynamic_step, op_type))
-    if dynamic_step == 0 and op_type in grid.dynamic_op:
+    if dynamic_step == 0 and op_type in op.dynamic_op:
         raise ValueError("Cannot use a dynamic step == 0 with an op_type {}".
                 format(dynamic_step, op_type))
 
@@ -25,10 +26,9 @@ def LocalOP(data_tik, dynamic_step = 0, op_type='density', \
         mean_arr = []
         mean_wgt = []
         for t0 in xrange(nframes):
-            center_k = np.mean(data_tik[t0,:,:], axis=0)
-            atoms = [data_tik[t0,:,:] - center_k]
-            if op_type in grid.dynamic_op:
-                atoms.append(data_tik[t0+dynamic_step,:,:] - center_k)
+            atoms = [data_tik[t0,:,:]]
+            if op_type in op.dynamic_op:
+                atoms.append(data_tik[t0+dynamic_step,:,:])
             atoms, op_i = op.OPCompute(atoms, atom_type, op_type, 
                     water_pos, ion_pos, rmsd_lambda, pbc = None)
             _, _, op_i = coord_system(atoms[0], op_i)
@@ -40,11 +40,10 @@ def LocalOP(data_tik, dynamic_step = 0, op_type='density', \
         r_mean = np.average(mean_arr, weights=mean_wgt, axis=0)
     
     for t0 in xrange(nframes):
-        center_k = np.mean(data_tik[t0,:,:], axis=0)
-        atoms = [data_tik[t0,:,:] - center_k]
-        if op_type in grid.dynamic_op:
-            atoms.append(data_tik[t0+dynamic_step,:,:] - center_k)
-        atoms, op_i = grid.OPCompute(atoms, atom_type, op_type, 
+        atoms = [data_tik[t0,:,:]]
+        if op_type in op.dynamic_op:
+            atoms.append(data_tik[t0+dynamic_step,:,:])
+        atoms, op_i = op.OPCompute(atoms, atom_type, op_type, 
                 water_pos, ion_pos, rmsd_lambda, pbc = None)
         logging.debug("!!!Number of ops: {}".format(op_i.shape))
         _, _, op_i = coord_system(atoms[0], op_i)
