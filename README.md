@@ -9,9 +9,9 @@ RMSD analysis designed for water in TMV, but extensible to other probjects.
 
 RMSDAnalyze -- The library
 ==========================
-RMSDAnalyze.convert -- Conversion from .gro to .hdf5
-RMSDAnalyze.grid    -- En-masse calculations on a grid
-RMSDAnalyze.local   -- The in-depth local RMSD analysis tool
+   RMSDAnalyze.convert -- Conversion from .gro to .hdf5
+   RMSDAnalyze.grid    -- En-masse calculations on a grid
+   RMSDAnalyze.local   -- The in-depth local RMSD analysis tool
 
 
 
