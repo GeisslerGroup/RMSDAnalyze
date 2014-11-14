@@ -16,29 +16,6 @@ class PlotLabeler:
         self.colorrange=colorrange
         self.colormap=colormap
 
-def OPPlotter2D(x,y, value, extent, gridsize, plotlabeler=PlotLabeler, style='hex', subplot=(1,1,1)):
-    plt.subplot( subplot[0], subplot[1], subplot[2] )
-    print "Gridsize: {}, extent: {}".format(gridsize, extent)
-    if plotlabeler.colorrange:
-        plot_out = plt.hexbin(x, y, C=value, \
-                   vmin=plotlabeler.colorrange[0], \
-                   vmax=plotlabeler.colorrange[1], \
-                   cmap=plotlabeler.colormap, \
-                   gridsize=gridsize, extent=extent)
-    else:
-        print x.shape
-        print y.shape
-        print value.shape
-        plot_out = plt.hexbin(x, y, C=value, 
-                   cmap=plotlabeler.colormap, 
-                   gridsize=gridsize, extent=extent)
-    cb = plt.colorbar(plot_out, spacing='uniform',extend='max')
-    plt.title (plotlabeler.title)
-    plt.xlabel(plotlabeler.xlabel)
-    plt.ylabel(plotlabeler.ylabel)
-    plt.axis('equal')
-    plt.tight_layout()
-
 def GetMtxScale(extent, gridsize):
     L = (extent[1] - extent[0], extent[3] - extent[2])
     mtx_scale = np.array( [2.*float(gridsize[0]) / L[0],    
@@ -122,11 +99,95 @@ def UpdateRunningMean2D(running_mean_mtx, running_weight_mtx, x, y, value, exten
     else:
         raise ValueError("Plotting style must be 'hex', received {}". format(style))
 
+def GridOPPlotter(data_tik, data, density, pos, 
+        display_type=[], dynamic_step = 0, colorrange=[None,None],
+        op_type='density', file_name=None, rmsd_lambda=None, 
+        colormap=plt.cm.Spectral_r, water_pos=83674, ion_pos = 423427, 
+        coord_system = coords.SlabCoords(10.0, 4.0), gridsize=[40,30],
+        pbc = None, nframes = None, plot = True, center = [0,0,0],
+        stars = None, stars_colors=None):
+    assert(len(stars) == len(stars_colors))
+
+    def OPPlotter2D(x,y, value, extent, gridsize, plotlabeler=PlotLabeler, 
+            style = 'hex', subplot = (1,1,1), stars = None):
+        plt.subplot( subplot[0], subplot[1], subplot[2] )
+        print "Gridsize: {}, extent: {}".format(gridsize, extent)
+        if plotlabeler.colorrange is None:
+            print x.shape
+            print y.shape
+            print value.shape
+            plot_out = plt.hexbin(x, y, C=value, 
+                       cmap=plotlabeler.colormap, 
+                       gridsize=gridsize, extent=extent)
+        else:
+            plot_out = plt.hexbin(x, y, C=value, 
+                       vmin=plotlabeler.colorrange[0], 
+                       vmax=plotlabeler.colorrange[1], 
+                       cmap=plotlabeler.colormap, 
+                       gridsize=gridsize, extent=extent)
+        if not stars is None:
+            stars = np.array(stars)
+            logging.debug("PLOTTING THE STARS: x={}, y={}".format(stars[:,0], stars[:,1]))
+            plt.scatter(stars[:,0], stars[:,1], c='k', 
+                    s=169, marker='s')
+            plt.scatter(stars[:,0], stars[:,1], c=stars_colors, 
+                    s=144, marker='s')
+        cb = plt.colorbar(plot_out, spacing='uniform',extend='max')
+        plt.title (plotlabeler.title)
+        plt.xlabel(plotlabeler.xlabel)
+        plt.ylabel(plotlabeler.ylabel)
+        plt.axis('equal')
+        plt.xlim([extent[0], extent[1]])
+        #plt.ylim([extent[2], extent[3]])
+        plt.tight_layout()
+
+    extent = coord_system.GetExtent()
+    # PLOTTING FUNCTION -- should be separate function, but it shares too many arguments
+    # Build the plotlabeler
+    if rmsd_lambda:
+        title=rmsd_lambda.title
+    elif op_type=='q6':
+        title='q6 plot'
+    else:
+        title='Some generic order parameter plot'
+    plotlabeler=PlotLabeler(title=title, 
+            xlabel="R, cylindrical radius from center of disc (nm)", 
+            ylabel="Z, vertical height (nm)", 
+            colormap = colormap, 
+            colorrange = colorrange)
+    # Plot OP image
+    OPPlotter2D(pos[:,0],pos[:,1], data, 
+            extent, gridsize, plotlabeler=plotlabeler, subplot=(2,1,1),
+            stars = stars)
+    
+
+    # Plot the protein structure
+    center_k = np.mean(data_tik[:,0:water_pos,:], axis=(0,1))
+    protein_ik = data_tik[0,0:water_pos,:] - center
+    protein_r, protein_z = coord_system(protein_ik)
+    # Plot density image
+    plotlabeler.title = "Density, no units"
+    logging.debug("density: {}".format(density))
+    plotlabeler.colorrange = None
+    OPPlotter2D(pos[:,0],pos[:,1], density, 
+            extent, gridsize, plotlabeler=plotlabeler, subplot=(2,1,2))
+    if 'png' in display_type:
+        if file_name:
+            logging.debug("SAVING FILE: {}".format(file_name + '.png'))
+            plt.savefig(file_name + '.png')
+        else:
+            logging.debug("SAVING FILE...{}".format('defaut.png'))
+            plt.savefig('default.png')
+    if 'display' in display_type:
+        plt.show()
+
 def GridOP(data_tik, display_type=[], dynamic_step = 0, colorrange=[None,None],
         op_type='density', file_name=None, rmsd_lambda=None, 
         colormap=plt.cm.Spectral_r, water_pos=83674, ion_pos = 423427, 
         coord_system = coords.SlabCoords(10.0, 4.0), gridsize=[40,30],
-        pbc = None, nframes = None, plot = True):
+        pbc = None, nframes = None, plot = True, center = [0,0,0]):
+
+    center = np.array(center)
 
     if dynamic_step > 0 and op_type in op.static_op:
         raise ValueError("Cannot use a dynamic step {} > 0 with an op_type {}"
@@ -145,9 +206,9 @@ def GridOP(data_tik, display_type=[], dynamic_step = 0, colorrange=[None,None],
     running_weight_mtx = None
     for t0 in xrange(nframes):
         #print "outputting time {} of {}".format(t0, data_tik.shape[0])
-        atoms = [data_tik[t0,:,:]]
+        atoms = [data_tik[t0,:,:] - center ] 
         if op_type in op.dynamic_op:
-            atoms.append(data_tik[t0+dynamic_step,:,:])
+            atoms.append(data_tik[t0+dynamic_step,:,:] - center)
         atoms, op_i = op.OPCompute(atoms, atom_type, op_type, 
                 water_pos, ion_pos, rmsd_lambda, pbc)
         # Convert to cylindrical coords and center
@@ -176,37 +237,10 @@ def GridOP(data_tik, display_type=[], dynamic_step = 0, colorrange=[None,None],
         data = np.sqrt(data[:,0] - np.sum(np.square(mean_r), axis=1))
 
     if plot:
-        # PLOTTING FUNCTION -- should be separate function, but it shares too many arguments
-        # Build the plotlabeler
-        if rmsd_lambda:
-            title=rmsd_lambda.title
-        elif op_type=='q6':
-            title='q6 plot'
-        else:
-            title='Some generic order parameter plot'
-        plotlabeler=PlotLabeler(title=title, 
-                xlabel="R, cylindrical radius from center of disc (nm)", 
-                ylabel="Z, vertical height (nm)", 
-                colormap = colormap, 
-                colorrange = colorrange)
-        # Plot OP image
-        OPPlotter2D(data_pos[:,0],data_pos[:,1], data, 
-                extent, gridsize, plotlabeler=plotlabeler, subplot=(2,1,1))
-        # Plot the protein structure
-        center_k = np.mean(data_tik[:,0:water_pos,:], axis=(0,1))
-        protein_ik = data_tik[0,0:water_pos,:] - center_k[0]
-        protein_r, protein_z = coord_system(protein_ik)
-        # Plot density image
-        plotlabeler.title = "Density, no units"
-        logging.debug("density: {}".format(density))
-        plotlabeler.colorrange = None
-        OPPlotter2D(density_pos[:,0],density_pos[:,1], density, 
-                extent, gridsize, plotlabeler=plotlabeler, subplot=(2,1,2))
-        if 'png' in display_type:
-            if file_name:
-                plt.savefig(file_name + '.png')
-            else:
-                plt.savefig('default.png')
-        if 'display' in display_type:
-            plt.show()
+        GridOPPlotter(data, density, pos, 
+                display_type, dynamic_step, colorrange,
+                op_type, file_name, rmsd_lambda, colormap, water_pos, ion_pos,
+                coord_system, gridsize, pbc, nframes, plot, center)
+
+
     return data, density, pos

@@ -4,17 +4,6 @@ import logging
 import numpy as np
 
 
-#def main():
-#    hex = grid.HexPBC([ 22.34405, 18.91217,   9.91809 ,
-#                         0.00000,  0.00000, -10.91895 ,
-#                         0.00000, -0.00000,  -0.00000 ])
-#    print hex
-#
-#    v1 = np.array([[22.0,   0, 9.91895]])
-#    v2 = np.array([[ 0.0,   0, 9.91895]])
-#    print hex.NearestPeriodic(v1, v2)
-#
-
 def main():
     logging.basicConfig(level=logging.DEBUG)
     config = ConfigParser.RawConfigParser()
@@ -35,43 +24,46 @@ def main():
     colormap= config.get('plotting','colormap')
     colormap= plt.cm.get_cmap(colormap)
 
-
     with h5py.File(hdffile,'r') as h5:
         ds = h5[hdfatom]
         print ds.shape
         print ds.attrs["dt"]
-
         rmsd_dT = 20 # Units of "frames"
-
-        #rmsd_lambda = grid.RMSDLambda( b_activity = True,                 
-        #                               b_scaletime = True, 
-        #                               rmsd_delay = rmsd_dT * .1,         
-        #                               cutoff = .38,  
-        #                               sharpness = 12)
         rmsd_lambda = op.RMSDLambda( b_activity = False,                 
                                        b_scaletime = False, 
                                        rmsd_delay = rmsd_dT * .1,         
                                        cutoff = .38,  
                                        sharpness = 12)
-
         hex = op.HexPBC([ 22.34405, 18.91217,   9.91809 ,
                              0.00000,  0.00000, -10.91895 ,
                              0.00000, -0.00000,  -0.00000 ])
-
+        center = hex.GetPBCCenter()
+        nframes = 5
         rmsd_lambda.SetTitle()
-
         coord_system = coords.SlabCoords(10.0, 4.0)
-        coord_system = coords.RadialCoords(10.0, 4.0)
-
+        #coord_system = coords.RadialCoords(10.0, 4.0)
         colorrange = None
         file_name = output_dir + "/TMV-test"
+        stars = [[0, 0], 
+                [3.5, -1], 
+                [2.5, -1.5],
+                [9.5, 3.5]]
+        stars_colors = ['k', 'b', 'r', '#984ea3']
 
-        grid.GridOP(ds, dynamic_step=rmsd_dT, op_type='rmsd', 
+        data, density, pos = grid.GridOP(
+                ds, dynamic_step=rmsd_dT, op_type='rmsd', 
                 colorrange=colorrange, display_type = display_type, 
                 file_name=file_name, rmsd_lambda = rmsd_lambda, 
                 colormap=colormap, coord_system = coord_system, 
-                pbc=hex, nframes = 5)
-
+                pbc=hex, nframes = nframes, center = center, plot = False)
+        print "Going to OP Plotter"
+        grid.GridOPPlotter(ds, data, density, pos,
+                dynamic_step=rmsd_dT, op_type='rmsd', 
+                colorrange=colorrange, display_type = display_type, 
+                file_name=file_name, rmsd_lambda = rmsd_lambda, 
+                colormap=colormap, coord_system = coord_system, 
+                pbc=hex, nframes = nframes, center = center,
+                stars = stars, stars_colors=stars_colors)
 
 if __name__ == "__main__":
     main()

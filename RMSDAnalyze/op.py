@@ -35,6 +35,8 @@ class HexPBC:
         ds_ki -= np.rint(ds_ki)
         dr_ik = np.dot(self.h, ds_ki).T
         return dr_ik
+    def GetPBCCenter(self):
+        return np.sum(self.h, axis=0) / 2.
     def __str__(self):
         return "Rows are box vectors: \n{}".format(self.h)
 
@@ -102,7 +104,10 @@ def ComputeRMSAngle(r0_ik, r1_ik, rmsd_lambda = None):
     r1_norm.shape = (r1_norm.shape[0],1)
     r1_v /= r1_norm
     theta = np.arccos(np.sum(r0_v*r1_v,axis=1))
-    return rmsd_lambda(theta)
+    if not rmsd_lambda is None:
+        return rmsd_lambda(theta)
+    else:
+        return theta
 
 def ComputeQ6(r_ik, cutoff_A):
     raise NotImplementedError("q6 order parameter not implemented")
