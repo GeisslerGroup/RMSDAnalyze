@@ -23,6 +23,8 @@ def main():
     
     colormap= config.get('plotting','colormap')
     colormap= plt.cm.get_cmap(colormap)
+    
+    nframes = 100
 
     with h5py.File(hdffile,'r') as h5:
         ds = h5[hdfatom]
@@ -38,7 +40,6 @@ def main():
                              0.00000,  0.00000, -10.91895 ,
                              0.00000, -0.00000,  -0.00000 ])
         center = hex.GetPBCCenter()
-        nframes = 5
         rmsd_lambda.SetTitle()
         coord_system = coords.SlabCoords(10.0, 4.0)
         #coord_system = coords.RadialCoords(10.0, 4.0)
@@ -57,13 +58,24 @@ def main():
                 colormap=colormap, coord_system = coord_system, 
                 pbc=hex, nframes = nframes, center = center, plot = False)
         print "Going to OP Plotter"
+        atom_to_mark = []
+        for monomer in xrange(34):
+            for resatm in xrange(10):
+                cys101 = 1467 + 2461 * monomer + resatm
+                atom_to_mark.append(cys101)
+            for resatm in xrange(10):
+                cys157 = 2388 + 2461 * monomer + resatm
+                atom_to_mark.append(cys157)
+        logging.debug("Length of mark atoms: {}".format(len(atom_to_mark)))
+
         grid.GridOPPlotter(ds, data, density, pos,
                 dynamic_step=rmsd_dT, op_type='rmsd', 
                 colorrange=colorrange, display_type = display_type, 
                 file_name=file_name, rmsd_lambda = rmsd_lambda, 
                 colormap=colormap, coord_system = coord_system, 
                 pbc=hex, nframes = nframes, center = center,
-                stars = stars, stars_colors=stars_colors)
+                stars = stars, stars_colors=stars_colors,
+                atom_to_mark = atom_to_mark)
 
 if __name__ == "__main__":
     main()

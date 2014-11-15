@@ -103,7 +103,7 @@ if __name__=="__main__":
             if out == 'mean':
                 op_bins_ctr = (op_bins[0:-1] + op_bins[1:]) / 2
                 op_t = [np.sum(op_bins_ctr * op_dist) for op_dist in op_dist_t]
-                if not scaletime:
+                if not diffusion:
                     op_t  = [0] + [np.sum(op_bins_ctr * op_dist) for op_dist in op_dist_t]
                     times = [0] + times
                 print op_t

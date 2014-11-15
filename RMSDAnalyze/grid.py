@@ -105,7 +105,7 @@ def GridOPPlotter(data_tik, data, density, pos,
         colormap=plt.cm.Spectral_r, water_pos=83674, ion_pos = 423427, 
         coord_system = coords.SlabCoords(10.0, 4.0), gridsize=[40,30],
         pbc = None, nframes = None, plot = True, center = [0,0,0],
-        stars = None, stars_colors=None):
+        stars = None, stars_colors=None, atom_to_mark = None):
     assert(len(stars) == len(stars_colors))
 
     def OPPlotter2D(x,y, value, extent, gridsize, plotlabeler=PlotLabeler, 
@@ -157,8 +157,7 @@ def GridOPPlotter(data_tik, data, density, pos,
             colorrange = colorrange)
     # Plot OP image
     OPPlotter2D(pos[:,0],pos[:,1], data, 
-            extent, gridsize, plotlabeler=plotlabeler, subplot=(2,1,1),
-            stars = stars)
+            extent, gridsize, plotlabeler=plotlabeler, subplot=(2,1,1))
     
 
     # Plot the protein structure
@@ -169,8 +168,18 @@ def GridOPPlotter(data_tik, data, density, pos,
     plotlabeler.title = "Density, no units"
     logging.debug("density: {}".format(density))
     plotlabeler.colorrange = None
+    plotlabeler.colormap = plt.get_cmap('YlGnBu')
     OPPlotter2D(pos[:,0],pos[:,1], density, 
-            extent, gridsize, plotlabeler=plotlabeler, subplot=(2,1,2))
+            extent, gridsize, plotlabeler=plotlabeler, subplot=(2,1,2),
+            stars = stars)
+    if not atom_to_mark is None:
+        mark_atoms = data_tik[0,atom_to_mark,:] - center
+        print("Marking atoms {} at positions {}"
+                .format(atom_to_mark, mark_atoms))
+        mark_pos_x, mark_pos_y = coord_system(mark_atoms)
+        logging.debug("Coord system positions: {}, {}"
+                .format(mark_pos_x, mark_pos_y))
+        plt.scatter(mark_pos_x, mark_pos_y)
     if 'png' in display_type:
         if file_name:
             logging.debug("SAVING FILE: {}".format(file_name + '.png'))
