@@ -74,7 +74,7 @@ class LocalSlabCoords:
                (np.abs(r_ik[:, 1]) < self.thickness/2.0))
         r    = r_ik[sub,0]
         z    = r_ik[sub,2]
-        if op_i.any():
+        if not op_i is None:
             op_i = op_i[sub]
             return r, z, op_i
         else:

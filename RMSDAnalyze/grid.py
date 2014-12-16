@@ -105,8 +105,17 @@ def GridOPPlotter(data_tik, data, density, pos,
         colormap=plt.cm.Spectral_r, water_pos=83674, ion_pos = 423427, 
         coord_system = coords.SlabCoords(10.0, 4.0), gridsize=[40,30],
         pbc = None, nframes = None, plot = True, center = [0,0,0],
-        stars = None, stars_colors=None, atom_to_mark = None):
+        stars = None, stars_colors=None, 
+        atom_to_mark = None, color_to_mark = None,
+        plot_op = True, plot_density = True):
     assert(len(stars) == len(stars_colors))
+    if not plot_op and not plot_density:
+        return
+    if plot_op and plot_density:
+        use_subplot=True
+    else:
+        use_subplot=False
+
 
     def OPPlotter2D(x,y, value, extent, gridsize, plotlabeler=PlotLabeler, 
             style = 'hex', subplot = (1,1,1), stars = None):
@@ -155,31 +164,43 @@ def GridOPPlotter(data_tik, data, density, pos,
             ylabel="Z, vertical height (nm)", 
             colormap = colormap, 
             colorrange = colorrange)
+    if use_subplot:
+        subplot=(2,1,1)
+    else:
+        subplot=(1,1,1)
     # Plot OP image
-    OPPlotter2D(pos[:,0],pos[:,1], data, 
-            extent, gridsize, plotlabeler=plotlabeler, subplot=(2,1,1))
+    if plot_op:
+        OPPlotter2D(pos[:,0],pos[:,1], data, 
+                extent, gridsize, plotlabeler=plotlabeler, subplot=subplot)
     
-
-    # Plot the protein structure
-    center_k = np.mean(data_tik[:,0:water_pos,:], axis=(0,1))
-    protein_ik = data_tik[0,0:water_pos,:] - center
-    protein_r, protein_z = coord_system(protein_ik)
     # Plot density image
     plotlabeler.title = "Density, no units"
     logging.debug("density: {}".format(density))
     plotlabeler.colorrange = None
     plotlabeler.colormap = plt.get_cmap('YlGnBu')
-    OPPlotter2D(pos[:,0],pos[:,1], density, 
-            extent, gridsize, plotlabeler=plotlabeler, subplot=(2,1,2),
-            stars = stars)
+    if use_subplot:
+        subplot=(2,1,2)
+    else:
+        subplot=(1,1,1)
+    if plot_density:
+        logging.debug("Plotting density!!!")
+        OPPlotter2D(pos[:,0],pos[:,1], density, 
+                extent, gridsize, plotlabeler=plotlabeler, subplot=subplot,
+                stars = stars)
     if not atom_to_mark is None:
+        if len(atom_to_mark) != len(color_to_mark):
+            raise ValueError("atom_to_mark and color_to_mark do not match size:" +
+                    "{} vs {}".format(len(atom_to_mark), len(color_to_mark)))
+        color_to_mark = np.array(color_to_mark)
         mark_atoms = data_tik[0,atom_to_mark,:] - center
         print("Marking atoms {} at positions {}"
                 .format(atom_to_mark, mark_atoms))
-        mark_pos_x, mark_pos_y = coord_system(mark_atoms)
+        mark_pos_x, mark_pos_y, mark_color = \
+                coord_system(mark_atoms, color_to_mark)
         logging.debug("Coord system positions: {}, {}"
                 .format(mark_pos_x, mark_pos_y))
-        plt.scatter(mark_pos_x, mark_pos_y)
+        plt.scatter(mark_pos_x, mark_pos_y, color = mark_color, alpha=.5,
+                marker=',')
     if 'png' in display_type:
         if file_name:
             logging.debug("SAVING FILE: {}".format(file_name + '.png'))

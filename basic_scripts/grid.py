@@ -24,7 +24,7 @@ def main():
     colormap= config.get('plotting','colormap')
     colormap= plt.cm.get_cmap(colormap)
     
-    nframes = 100
+    nframes = 200
 
     with h5py.File(hdffile,'r') as h5:
         ds = h5[hdfatom]
@@ -41,15 +41,25 @@ def main():
                              0.00000, -0.00000,  -0.00000 ])
         center = hex.GetPBCCenter()
         rmsd_lambda.SetTitle()
-        coord_system = coords.SlabCoords(10.0, 4.0)
-        #coord_system = coords.RadialCoords(10.0, 4.0)
+        coord_system = coords.SlabCoords(10.0, 4.0, thickness=3.0)
+        coord_system = coords.RadialCoords(10.0, 4.0)
+        #coord_system = coords.LocalSlabCoords(-10.0, 0.0, -4.0, 4.0, thickness = 3.0)
         colorrange = None
-        file_name = output_dir + "/TMV-test"
+        file_name = output_dir + "/TMV-grid-radial"
         stars = [[0, 0], 
-                [3.5, -1], 
-                [2.5, -1.5],
+                [2.5, -1.],
+                [2.5, -0.],
+                [3.5, -0.], 
+                [4.5, -0.],
+                [5.5, -0.],
                 [9.5, 3.5]]
-        stars_colors = ['k', 'b', 'r', '#984ea3']
+        stars_colors = ['k',
+               '#d7191c',
+               '#fdae61',
+               '#ffffbf',
+               '#abdda4',
+               '#2b83ba',
+               '#7570b3']
 
         data, density, pos = grid.GridOP(
                 ds, dynamic_step=rmsd_dT, op_type='rmsd', 
@@ -59,13 +69,16 @@ def main():
                 pbc=hex, nframes = nframes, center = center, plot = False)
         print "Going to OP Plotter"
         atom_to_mark = []
+        color_to_mark = []
         for monomer in xrange(34):
             for resatm in xrange(10):
                 cys101 = 1467 + 2461 * monomer + resatm
                 atom_to_mark.append(cys101)
+                color_to_mark.append('b')
             for resatm in xrange(10):
                 cys157 = 2388 + 2461 * monomer + resatm
                 atom_to_mark.append(cys157)
+                color_to_mark.append('r')
         logging.debug("Length of mark atoms: {}".format(len(atom_to_mark)))
 
         grid.GridOPPlotter(ds, data, density, pos,
@@ -75,7 +88,8 @@ def main():
                 colormap=colormap, coord_system = coord_system, 
                 pbc=hex, nframes = nframes, center = center,
                 stars = stars, stars_colors=stars_colors,
-                atom_to_mark = atom_to_mark)
+                atom_to_mark = atom_to_mark, color_to_mark = color_to_mark,
+                plot_op=False)
 
 if __name__ == "__main__":
     main()

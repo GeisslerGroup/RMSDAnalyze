@@ -41,7 +41,8 @@ class HexPBC:
         return "Rows are box vectors: \n{}".format(self.h)
 
 class RMSDLambda:
-    def __init__(self, b_scaletime, b_activity, rmsd_delay=0, cutoff=0, sharpness=0,title=None):
+    def __init__(self, b_scaletime, b_activity, rmsd_delay=0, cutoff=0, 
+            sharpness=0,title=None):
         self.b_scaletime = b_scaletime
         self.b_activity = b_activity
         self.rmsd_delay = rmsd_delay
@@ -52,25 +53,34 @@ class RMSDLambda:
         if self.b_scaletime:
             rmsd /= np.sqrt(self.rmsd_delay)
         if self.b_activity:
-            return np.reciprocal(1 + np.exp( -self.sharpness * (rmsd - self.cutoff)))
+            return np.reciprocal(
+                    1 + np.exp( -self.sharpness * (rmsd - self.cutoff)))
         else:
             return rmsd
     def SetTitle(self, rmsd_type='rmsd'):
-        print("rmsd_type={}, activity={}, scaletime={}".format(rmsd_type, self.b_activity, self.b_scaletime))
+        print("rmsd_type={}, activity={}, scaletime={}".
+                format(rmsd_type, self.b_activity, self.b_scaletime))
         if rmsd_type == 'angle':
             if self.b_activity:
                 print "SETTING TITLE GOOD"
-                self.title='Mean angular activity, cutoff={}rad, k={}rad^-1, t_delay={}ps'.format(self.cutoff, self.sharpness, self.rmsd_delay)
+                self.title='Mean angular activity, ' + \
+                        'cutoff={}rad, k={}rad^-1, t_delay={}ps'.format(
+                                self.cutoff, self.sharpness, self.rmsd_delay)
             else:
                 print "SETTING TITLE BAD"
-                self.title='Mean angular displacement, t_delay={}ps'.format(self.rmsd_delay)
+                self.title='Mean angular displacement, t_delay={}ps'.\
+                        format(self.rmsd_delay)
         elif rmsd_type == 'rmsd':
             if self.b_activity and self.b_scaletime:
-                self.title='Mean activity (scaled), cutoff={}nm/ps^(.5), k={}ps^(.5)/nm, t_delay={}ps'.format(self.cutoff, self.sharpness, self.rmsd_delay)
+                self.title='Mean activity (scaled), '+ \
+                        'cutoff={}nm/ps^(.5), k={}ps^(.5)/nm, t_delay={}ps'.\
+                        format(self.cutoff, self.sharpness, self.rmsd_delay)
             elif self.b_activity:
-                self.title='Mean activity, cutoff={}nm, k={}nm^-1, t_delay={}ps'.format(self.cutoff, self.sharpness, self.rmsd_delay)
+                self.title='Mean activity, cutoff={}nm, k={}nm^-1, t_delay={}ps'.\
+                        format(self.cutoff, self.sharpness, self.rmsd_delay)
             elif self.b_scaletime:
-                self.title='Scaled RMSD (root diffusion), t_delay={}ps'.format(self.rmsd_delay)
+                self.title='Scaled RMSD (root diffusion), t_delay={}ps'.\
+                        format(self.rmsd_delay)
             else:
                 self.title='Mean RMSD, t_delay={}ps'.format(self.rmsd_delay)
 
@@ -92,7 +102,7 @@ def ComputeRMSD(r0_ik, r1_ik, pre_cutoff=None, post_cutoff=None, rmsd_lambda = N
     op_i = np.hstack([magsq_dr_i, dr_ik])
     return op_i
 
-def ComputeRMSAngle(r0_ik, r1_ik, rmsd_lambda = None):
+def ComputeRMSAngle(r0_ik, r1_ik, rmsd_lambda = None, autocorr=False):
     r0_v = (r0_ik[0::3] - r0_ik[1::3]) + \
            (r0_ik[0::3] - r0_ik[2::3])
     r1_v = (r1_ik[0::3] - r1_ik[1::3]) + \
@@ -103,11 +113,14 @@ def ComputeRMSAngle(r0_ik, r1_ik, rmsd_lambda = None):
     r1_norm = LA.norm(r1_v, axis=1)
     r1_norm.shape = (r1_norm.shape[0],1)
     r1_v /= r1_norm
-    theta = np.arccos(np.sum(r0_v*r1_v,axis=1))
+    if autocorr:
+        return np.sum(r0_v * r1_v, axis = 1)
+    theta = np.arccos(np.sum(r0_v * r1_v, axis = 1))
     if not rmsd_lambda is None:
         return rmsd_lambda(theta)
     else:
         return theta
+
 
 def ComputeQ6(r_ik, cutoff_A):
     raise NotImplementedError("q6 order parameter not implemented")
@@ -132,7 +145,7 @@ def OPCompute(atoms, atom_type, op_type, water_pos, ion_pos, rmsd_lambda, pbc=No
     elif op_type == 'rmsd':
         op_i = ComputeRMSD(atoms[0], atoms[1], post_cutoff=5.0, rmsd_lambda = rmsd_lambda, pbc=pbc)
     elif op_type == 'angle':
-        op_i = ComputeRMSAngle(atoms[0], atoms[1], rmsd_lambda = rmsd_lambda)
+        op_i = ComputeRMSAngle(atoms[0], atoms[1], autocorr=True)
     else:
         raise ValueError("GridOPRadial passed op_type that is not known: {}".format(op_type))
     # POST-FILTER
