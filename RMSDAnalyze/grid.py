@@ -108,7 +108,12 @@ def GridOPPlotter(data_tik, data, density, pos,
         stars = None, stars_colors=None, 
         atom_to_mark = None, color_to_mark = None,
         plot_op = True, plot_density = True):
-    assert(len(stars) == len(stars_colors))
+    # Check that either both or neither stars and stars_colors is None
+    assert((stars is None and stars_colors is None) or
+            not (stars is None and stars_colors is None))
+    # If stars were passed, check that the lengths match
+    if not stars is None:
+        assert(len(stars) == len(stars_colors))
     if not plot_op and not plot_density:
         return
     if plot_op and plot_density:
@@ -177,7 +182,7 @@ def GridOPPlotter(data_tik, data, density, pos,
     plotlabeler.title = "Density, no units"
     logging.debug("density: {}".format(density))
     plotlabeler.colorrange = None
-    plotlabeler.colormap = plt.get_cmap('YlGnBu')
+    plotlabeler.colormap = colormap
     if use_subplot:
         subplot=(2,1,2)
     else:
@@ -235,7 +240,7 @@ def GridOP(data_tik, display_type=[], dynamic_step = 0, colorrange=[None,None],
     running_mean_mtx = None
     running_weight_mtx = None
     for t0 in xrange(nframes):
-        #print "outputting time {} of {}".format(t0, data_tik.shape[0])
+        print "outputting time {} of {}".format(t0, data_tik.shape[0])
         atoms = [data_tik[t0,:,:] - center ] 
         if op_type in op.dynamic_op:
             atoms.append(data_tik[t0+dynamic_step,:,:] - center)
@@ -248,7 +253,7 @@ def GridOP(data_tik, display_type=[], dynamic_step = 0, colorrange=[None,None],
         running_mean_mtx, running_weight_mtx = UpdateRunningMean2D(
                 running_mean_mtx, running_weight_mtx, 
                 r, z, op_i, extent, gridsize)
-        print running_mean_mtx[running_mean_mtx != 0]
+        logging.debug(running_mean_mtx[running_mean_mtx != 0])
 
     data, weight, pos = ProcessSparseRunner(
             running_mean_mtx, running_weight_mtx, 

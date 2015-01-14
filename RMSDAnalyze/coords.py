@@ -41,7 +41,11 @@ class RadialCoords:
     def GetExtent(self):
         return [0, self.r_extent, -self.z_extent, self.z_extent]
     def UndoJacobian(self, value, r, z, gridsize):
-        extra_rad = self.r_extent / float(gridsize[0])
+        # Include an extra heuristic half-box to the radius to account for 
+        # volume errors and remove singularities from the radial coordinate system
+        #  Decrease this quantity to darken the r=0 region
+        #  Increase this quantity to suppress the r=0 region
+        extra_rad = self.r_extent / float(gridsize[0]) / 4
         logging.debug("value shape, r shape: {}, {}".format(value.shape, r.shape))
         return value[:,0] / (r + extra_rad)
     def __call__(self, r_ik, op_i=None):

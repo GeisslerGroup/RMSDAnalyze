@@ -91,7 +91,7 @@ def gro2hdf5(gro_in, hdf_out, hdf_atom):
     lf = tail(gro_in, 1, atoms+2)[0]
     tf = float(lf.split()[-1])
     print "tf = {}".format(tf)
-    N  = int(round((tf / (t1-t0)))) + 1
+    N  = int(round( (tf - t0) / (t1-t0) )) + 1
 
     h5 = h5py.File(hdf_out,'w')
     ds = h5.create_dataset(hdf_atom, (N,atoms,3), dtype='f32')
