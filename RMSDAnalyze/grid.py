@@ -240,7 +240,7 @@ def GridOP(data_tik, display_type=[], dynamic_step = 0, colorrange=[None,None],
     running_mean_mtx = None
     running_weight_mtx = None
     for t0 in xrange(nframes):
-        print "outputting time {} of {}".format(t0, data_tik.shape[0])
+        print "outputting time {} of {}".format(t0, nframes)
         atoms = [data_tik[t0,:,:] - center ] 
         if op_type in op.dynamic_op:
             atoms.append(data_tik[t0+dynamic_step,:,:] - center)

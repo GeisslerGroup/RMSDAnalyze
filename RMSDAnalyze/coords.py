@@ -45,7 +45,7 @@ class RadialCoords:
         # volume errors and remove singularities from the radial coordinate system
         #  Decrease this quantity to darken the r=0 region
         #  Increase this quantity to suppress the r=0 region
-        extra_rad = self.r_extent / float(gridsize[0]) / 4
+        extra_rad = self.r_extent / float(gridsize[0]) / 6.
         logging.debug("value shape, r shape: {}, {}".format(value.shape, r.shape))
         return value[:,0] / (r + extra_rad)
     def __call__(self, r_ik, op_i=None):
@@ -55,7 +55,7 @@ class RadialCoords:
         sub = (r_cyl_i < self.r_extent) * (np.abs(z_cyl_i) < self.z_extent)
         r    = r_cyl_i[sub]
         z    = z_cyl_i[sub]
-        if op_i != None:
+        if not op_i is None:
             op_i = op_i[sub]
             return r, z, op_i
         else:
